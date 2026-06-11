@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import dayjs from 'dayjs'
+import { persist } from '@/utils/persist'
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
@@ -21,38 +22,40 @@ const COACHES = [
 ]
 
 const today = dayjs()
-const mockCourses = [
+const INITIAL_COURSES = [
   {
     id: 'k001', type: 'group', name: '羽毛球基础班', sport: '羽毛球', coachId: 'c001',
     date: today.add(1, 'day').format('YYYY-MM-DD'), startTime: '09:00', endTime: '11:00',
-    venue: '1号场地', capacity: 12, enrolled: 8, price: 80, status: 'open', remark: ''
+    venue: '1号场地', capacity: 12, enrolled: 0, price: 80, status: 'open', remark: ''
   },
   {
     id: 'k002', type: 'group', name: '篮球提高班', sport: '篮球', coachId: 'c003',
     date: today.add(1, 'day').format('YYYY-MM-DD'), startTime: '14:00', endTime: '16:00',
-    venue: '篮球馆A', capacity: 15, enrolled: 10, price: 100, status: 'open', remark: ''
+    venue: '篮球馆A', capacity: 15, enrolled: 0, price: 100, status: 'open', remark: ''
   },
   {
-    id: 'k003', type: 'private', name: '羽毛球私教课-张伟', sport: '羽毛球', coachId: 'c002',
+    id: 'k003', type: 'private', name: '羽毛球私教课', sport: '羽毛球', coachId: 'c002',
     date: today.add(2, 'day').format('YYYY-MM-DD'), startTime: '10:00', endTime: '11:00',
-    venue: '2号场地', capacity: 1, enrolled: 1, price: 300, status: 'open', remark: '李娜私教'
+    venue: '2号场地', capacity: 1, enrolled: 0, price: 300, status: 'open', remark: ''
   },
   {
     id: 'k004', type: 'activity', name: '周末羽毛球友谊赛', sport: '羽毛球', coachId: 'c001',
     date: today.add(3, 'day').format('YYYY-MM-DD'), startTime: '15:00', endTime: '18:00',
-    venue: '主馆', capacity: 24, enrolled: 16, price: 50, status: 'open', remark: '欢迎所有会员参加'
+    venue: '主馆', capacity: 24, enrolled: 0, price: 50, status: 'open', remark: '欢迎所有会员参加'
   },
   {
     id: 'k005', type: 'group', name: '瑜伽放松班', sport: '瑜伽', coachId: 'c004',
     date: today.add(1, 'day').format('YYYY-MM-DD'), startTime: '19:00', endTime: '20:30',
-    venue: '瑜伽室', capacity: 20, enrolled: 5, price: 60, status: 'open', remark: ''
+    venue: '瑜伽室', capacity: 20, enrolled: 0, price: 60, status: 'open', remark: ''
   }
 ]
 
+const INITIAL_ENROLLMENTS = []
+
 export const useCourseStore = defineStore('course', {
   state: () => ({
-    courses: [...mockCourses],
-    enrollments: [],
+    courses: [...INITIAL_COURSES],
+    enrollments: [...INITIAL_ENROLLMENTS],
     coaches: [...COACHES],
     sports: SPORTS,
     courseTypes: COURSE_TYPES
@@ -79,17 +82,20 @@ export const useCourseStore = defineStore('course', {
         status: 'open'
       }
       this.courses.unshift(course)
+      persist()
       return course
     },
     updateCourse(id, data) {
       const index = this.courses.findIndex(c => c.id === id)
       if (index !== -1) {
         this.courses[index] = { ...this.courses[index], ...data }
+        persist()
       }
     },
     deleteCourse(id) {
       this.courses = this.courses.filter(c => c.id !== id)
       this.enrollments = this.enrollments.filter(e => e.courseId !== id)
+      persist()
     },
     enrollMember(courseId, memberId) {
       const course = this.courses.find(c => c.id === courseId)
@@ -105,6 +111,7 @@ export const useCourseStore = defineStore('course', {
         status: 'enrolled'
       })
       course.enrolled += 1
+      persist()
       return { success: true }
     },
     cancelEnrollment(courseId, memberId) {
@@ -112,8 +119,13 @@ export const useCourseStore = defineStore('course', {
       if (enrollment) {
         this.enrollments = this.enrollments.filter(e => e.id !== enrollment.id)
         const course = this.courses.find(c => c.id === courseId)
-        if (course && course.enrolled > 0) course.enrolled -= 1
+        if (course && course.enrolled > 0) {
+          course.enrolled -= 1
+        }
+        persist()
+        return { success: true }
       }
+      return { success: false, msg: '未找到报名记录' }
     },
     getEnrollmentsByCourse(courseId) {
       return this.enrollments.filter(e => e.courseId === courseId)

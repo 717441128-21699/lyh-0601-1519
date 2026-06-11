@@ -54,10 +54,13 @@
           <template #default="{ row }">¥{{ row.price }}</template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
-        <el-table-column label="操作" width="200" fixed="right" class="no-print">
+        <el-table-column label="操作" width="260" fixed="right" class="no-print">
           <template #default="{ row }">
             <div class="table-actions">
               <el-button size="small" type="success" @click="openEnrollDialog(row)">报名</el-button>
+              <el-button size="small" type="primary" plain @click="openRosterDialog(row)" :disabled="row.enrolled === 0">
+                名单({{ row.enrolled }})
+              </el-button>
               <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
               <el-button size="small" type="danger" @click="deleteCourse(row)">删除</el-button>
             </div>
@@ -134,7 +137,11 @@
             </template>
           </el-table-column>
           <el-table-column label="剩余次数" width="90" align="center">
-            <template #default="{ row }">{{ row.remainingSessions }}</template>
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.remainingSessions < 5 ? 'danger' : 'info'">
+                {{ row.remainingSessions }}
+              </el-tag>
+            </template>
           </el-table-column>
           <el-table-column label="状态" width="100" align="center">
             <template #default="{ row }">
@@ -153,6 +160,40 @@
             </template>
           </el-table-column>
         </el-table>
+      </div>
+    </el-dialog>
+
+    <el-dialog v-model="rosterDialogVisible" title="学员名单" width="600px">
+      <div v-if="rosterCourse">
+        <div style="margin-bottom: 16px; padding: 12px; background: #f5f7fa; border-radius: 4px">
+          <strong>{{ rosterCourse.name }}</strong>
+          <span style="margin-left: 16px; color: #606266">{{ rosterCourse.date }} {{ rosterCourse.startTime }}-{{ rosterCourse.endTime }}</span>
+          <span style="margin-left: 16px; color: #606266">共 {{ rosterCourse.enrolled }} 人</span>
+        </div>
+        <el-table :data="rosterMembers" size="small" style="width: 100%">
+          <el-table-column label="序号" width="60" align="center" type="index" />
+          <el-table-column prop="name" label="姓名" width="100" />
+          <el-table-column prop="phone" label="电话" width="130" />
+          <el-table-column label="等级" width="100">
+            <template #default="{ row }">
+              <el-tag :color="memberStore.getLevelColor(row.level)" effect="dark" style="color:#fff" size="small">
+                {{ memberStore.getLevelLabel(row.level) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="报名时间" width="150">
+            <template #default="{ row }">{{ row.enrollDate }}</template>
+          </el-table-column>
+          <el-table-column label="剩余次数" width="90" align="center">
+            <template #default="{ row }">{{ row.remainingSessions }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" align="center" class="no-print">
+            <template #default="{ row }">
+              <el-button size="small" type="danger" plain @click="cancelEnroll(row)">取消报名</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-if="rosterMembers.length === 0" description="暂无学员报名" />
       </div>
     </el-dialog>
   </div>
@@ -275,5 +316,38 @@ function doEnroll(member) {
   } else {
     ElMessage.error(result.msg)
   }
+}
+
+const rosterDialogVisible = ref(false)
+const rosterCourse = ref(null)
+
+const rosterMembers = computed(() => {
+  if (!rosterCourse.value) return []
+  const enrollments = courseStore.getEnrollmentsByCourse(rosterCourse.value.id)
+  return enrollments.map(e => {
+    const member = memberStore.getMemberById(e.memberId)
+    if (!member) return null
+    return { ...member, enrollDate: e.enrollDate }
+  }).filter(Boolean)
+})
+
+function openRosterDialog(row) {
+  rosterCourse.value = row
+  rosterDialogVisible.value = true
+}
+
+function cancelEnroll(member) {
+  ElMessageBox.confirm(
+    `确定取消「${member.name}」的「${rosterCourse.value.name}」报名吗？名额将自动恢复。`,
+    '取消报名确认',
+    { type: 'warning' }
+  ).then(() => {
+    const result = courseStore.cancelEnrollment(rosterCourse.value.id, member.id)
+    if (result.success) {
+      ElMessage.success('已取消报名，名额已恢复')
+    } else {
+      ElMessage.error(result.msg || '操作失败')
+    }
+  }).catch(() => {})
 }
 </script>

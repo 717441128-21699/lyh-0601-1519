@@ -72,6 +72,13 @@
                   </el-tag>
                 </template>
               </el-table-column>
+              <el-table-column label="剩余次数" width="90" align="center">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="row.remainingSessions < 1 ? 'danger' : row.remainingSessions < 5 ? 'warning' : 'success'">
+                    {{ row.remainingSessions }}
+                  </el-tag>
+                </template>
+              </el-table-column>
               <el-table-column label="签到状态" width="100" align="center">
                 <template #default="{ row }">
                   <el-tag v-if="row.checkStatus" :type="checkinStore.getStatusType(row.checkStatus)" size="small">
@@ -89,14 +96,15 @@
               <el-table-column label="操作" width="280" fixed="right" class="no-print">
                 <template #default="{ row }">
                   <div class="table-actions">
-                    <el-button size="small" type="success" @click="doCheckin(row, 'checked')">签到</el-button>
-                    <el-button size="small" type="warning" @click="openLeaveDialog(row)">请假</el-button>
-                    <el-button size="small" type="primary" @click="doCheckin(row, 'makeup')">补课</el-button>
-                    <el-button size="small" type="danger" @click="doCheckin(row, 'absent')">爽约</el-button>
+                    <el-button size="small" type="success" @click="doCheckin(row, 'checked')" :disabled="row.checkStatus === 'checked' || row.remainingSessions < 1">签到</el-button>
+                    <el-button size="small" type="warning" @click="openLeaveDialog(row)" :disabled="row.checkStatus">请假</el-button>
+                    <el-button size="small" type="primary" @click="doCheckin(row, 'makeup')" :disabled="row.checkStatus === 'checked' || row.remainingSessions < 1">补课</el-button>
+                    <el-button size="small" type="danger" @click="doCheckin(row, 'absent')" :disabled="row.checkStatus">爽约</el-button>
                   </div>
                 </template>
               </el-table-column>
             </el-table>
+            <el-empty v-if="enrolledMembers.length === 0" description="暂无学员报名此课程" />
           </div>
           <el-empty v-else description="请在左侧选择一个场次" />
         </div>
@@ -164,13 +172,6 @@ function selectCourse(row) {
 const enrolledMembers = computed(() => {
   if (!selectedCourse.value) return []
   const enrollments = courseStore.getEnrollmentsByCourse(selectedCourse.value.id)
-  if (enrollments.length === 0) {
-    return memberStore.members.slice(0, 5).map(m => {
-      const status = checkinStore.getMemberCheckinStatus(selectedCourse.value.id, m.id)
-      const record = checkinStore.checkins.find(c => c.courseId === selectedCourse.value.id && c.memberId === m.id)
-      return { ...m, checkStatus: status, checkTime: record?.checkTime, checkRemark: record?.remark }
-    })
-  }
   return enrollments.map(e => {
     const member = memberStore.getMemberById(e.memberId)
     if (!member) return null
@@ -186,13 +187,33 @@ const makeupCourses = computed(() => {
   return courseStore.getUpcomingCourses(14).filter(c => c.id !== selectedCourse.value?.id)
 })
 
+function validateBeforeCheckin(member, status) {
+  if (status === 'checked' || status === 'makeup') {
+    if (!memberStore.hasEnoughSessions(member.id)) {
+      ElMessage.error(`会员「${member.name}」剩余次数不足，无法${status === 'checked' ? '签到' : '补课'}！当前剩余：${member.remainingSessions}次`)
+      return false
+    }
+  }
+  if (member.checkStatus === 'checked') {
+    ElMessage.warning('该会员已完成签到')
+    return false
+  }
+  return true
+}
+
 function doCheckin(member, status) {
+  if (!validateBeforeCheckin(member, status)) return
+
   const msg = status === 'checked' ? '签到成功' : status === 'absent' ? '已标记爽约' : status === 'makeup' ? '补课登记成功' : '已处理'
-  ElMessageBox.confirm(
-    `确定为「${member.name}」执行${checkinStore.getStatusLabel(status)}吗？` + (status === 'checked' ? '将自动扣次。' : (status === 'absent' ? '爽约次数将累计。' : '')),
-    '确认',
-    { type: 'warning' }
-  ).then(() => {
+  const confirmMsg = status === 'checked'
+    ? `确定为「${member.name}」签到吗？将扣除1次课时。当前剩余：${member.remainingSessions}次`
+    : status === 'makeup'
+    ? `确定为「${member.name}」登记补课吗？将扣除1次课时。当前剩余：${member.remainingSessions}次`
+    : status === 'absent'
+    ? `确定标记「${member.name}」为爽约吗？爽约次数将累计。`
+    : `确定为「${member.name}」执行${checkinStore.getStatusLabel(status)}吗？`
+
+  ElMessageBox.confirm(confirmMsg, '确认操作', { type: 'warning' }).then(() => {
     checkinStore.addCheckin({
       courseId: selectedCourse.value.id,
       memberId: member.id,
@@ -200,7 +221,11 @@ function doCheckin(member, status) {
       remark: ''
     })
     if (status === 'checked') {
-      memberStore.deductSession(member.id)
+      const deductResult = memberStore.deductSession(member.id)
+      if (!deductResult) {
+        ElMessage.error('扣次失败，请检查账户状态')
+        return
+      }
       memberStore.resetAbsent(member.id)
       consumptionStore.addTransaction({
         memberId: member.id,
@@ -208,12 +233,24 @@ function doCheckin(member, status) {
         amount: 0,
         sessions: 1,
         method: 'balance',
-        remark: selectedCourse.value.name + ' 扣次'
+        remark: selectedCourse.value.name + ' 签到扣次'
       })
     } else if (status === 'absent') {
       memberStore.incrementAbsent(member.id)
     } else if (status === 'makeup') {
-      memberStore.deductSession(member.id)
+      const deductResult = memberStore.deductSession(member.id)
+      if (!deductResult) {
+        ElMessage.error('扣次失败，请检查账户状态')
+        return
+      }
+      consumptionStore.addTransaction({
+        memberId: member.id,
+        type: 'deduct',
+        amount: 0,
+        sessions: 1,
+        method: 'balance',
+        remark: selectedCourse.value.name + ' 补课扣次'
+      })
     }
     ElMessage.success(msg)
     quickSearch.value = ''
@@ -232,7 +269,15 @@ function quickCheckin() {
     return
   }
   const member = members[0]
-  doCheckin(member, 'checked')
+  const isEnrolled = courseStore.isMemberEnrolled(selectedCourse.value.id, member.id)
+  if (!isEnrolled) {
+    ElMessage.warning(`会员「${member.name}」未报名本场次，无法签到`)
+    return
+  }
+  const enrolledMember = enrolledMembers.value.find(m => m.id === member.id)
+  if (enrolledMember) {
+    doCheckin(enrolledMember, 'checked')
+  }
 }
 
 const leaveDialogVisible = ref(false)
@@ -255,7 +300,10 @@ function confirmLeave() {
     remark: leaveRemark.value
   })
   if (makeupCourseId.value) {
-    courseStore.enrollMember(makeupCourseId.value, leaveMember.value.id)
+    const enrollResult = courseStore.enrollMember(makeupCourseId.value, leaveMember.value.id)
+    if (!enrollResult.success) {
+      ElMessage.warning(`补课报名失败：${enrollResult.msg}`)
+    }
   }
   ElMessage.success('请假登记成功')
   leaveDialogVisible.value = false

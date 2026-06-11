@@ -96,9 +96,12 @@
     <el-dialog v-model="rechargeDialogVisible" title="会员充值" width="500px">
       <el-form ref="rechargeFormRef" :model="rechargeForm" :rules="rechargeRules" label-width="100px">
         <el-form-item label="选择会员" prop="memberId">
-          <el-select v-model="rechargeForm.memberId" filterable placeholder="搜索会员姓名" style="width: 100%">
+          <el-select v-model="rechargeForm.memberId" filterable placeholder="搜索会员姓名" style="width: 100%" @change="updateRechargeMemberInfo">
             <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name + ' - ' + m.phone" :value="m.id" />
           </el-select>
+        </el-form-item>
+        <el-form-item v-if="currentRechargeMember" label="当前账户">
+          <span>余额: <strong>¥{{ currentRechargeMember.balance }}</strong> | 次数: <strong>{{ currentRechargeMember.remainingSessions }}/{{ currentRechargeMember.totalSessions }}</strong></span>
         </el-form-item>
         <el-form-item label="充值金额" prop="amount">
           <el-input-number v-model="rechargeForm.amount" :min="0" :step="100" style="width: 100%" />
@@ -124,9 +127,13 @@
     <el-dialog v-model="consumeDialogVisible" title="商品/服务消费" width="500px">
       <el-form ref="consumeFormRef" :model="consumeForm" :rules="consumeRules" label-width="100px">
         <el-form-item label="选择会员" prop="memberId">
-          <el-select v-model="consumeForm.memberId" filterable placeholder="搜索会员姓名" style="width: 100%">
+          <el-select v-model="consumeForm.memberId" filterable placeholder="搜索会员姓名" style="width: 100%" @change="updateConsumeMemberInfo">
             <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name + ' 余额:¥' + m.balance + ' 次数:' + m.remainingSessions" :value="m.id" />
           </el-select>
+        </el-form-item>
+        <el-form-item v-if="currentConsumeMember" label="当前账户">
+          <span :style="{ color: currentConsumeMember.balance < 200 ? '#f56c6c' : '' }">余额: <strong>¥{{ currentConsumeMember.balance }}</strong></span>
+          <span style="margin-left: 20px; color: currentConsumeMember.remainingSessions < 5 ? '#f56c6c' : ''">次数: <strong>{{ currentConsumeMember.remainingSessions }}/{{ currentConsumeMember.totalSessions }}</strong></span>
         </el-form-item>
         <el-form-item label="消费项目" prop="remark">
           <el-input v-model="consumeForm.remark" placeholder="请输入消费项目，如：场地费、饮料等" />
@@ -142,19 +149,33 @@
             <el-option v-for="m in consumptionStore.paymentMethods" :key="m.value" :label="m.label" :value="m.value" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="currentConsumeMember && consumeForm.method === 'balance'" label="余额校验">
+          <el-tag :type="canConsumeBalance ? 'success' : 'danger'">
+            {{ canConsumeBalance ? '余额充足' : '余额不足：需¥' + consumeForm.amount + '，仅有¥' + currentConsumeMember.balance }}
+          </el-tag>
+        </el-form-item>
+        <el-form-item v-if="currentConsumeMember && consumeForm.sessions > 0" label="次数校验">
+          <el-tag :type="canConsumeSessions ? 'success' : 'danger'">
+            {{ canConsumeSessions ? '次数充足' : '次数不足：需' + consumeForm.sessions + '次，仅有' + currentConsumeMember.remainingSessions + '次' }}
+          </el-tag>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="consumeDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitConsume">确认消费</el-button>
+        <el-button type="primary" :disabled="!canSubmitConsume" @click="submitConsume">确认消费</el-button>
       </template>
     </el-dialog>
 
     <el-dialog v-model="refundDialogVisible" title="退款处理" width="500px">
       <el-form ref="refundFormRef" :model="refundForm" :rules="refundRules" label-width="100px">
         <el-form-item label="选择会员" prop="memberId">
-          <el-select v-model="refundForm.memberId" filterable placeholder="搜索会员姓名" style="width: 100%">
+          <el-select v-model="refundForm.memberId" filterable placeholder="搜索会员姓名" style="width: 100%" @change="updateRefundMemberInfo">
             <el-option v-for="m in memberStore.members" :key="m.id" :label="m.name + ' 余额:¥' + m.balance + ' 次数:' + m.remainingSessions" :value="m.id" />
           </el-select>
+        </el-form-item>
+        <el-form-item v-if="currentRefundMember" label="当前账户">
+          <span>余额: <strong>¥{{ currentRefundMember.balance }}</strong></span>
+          <span style="margin-left: 20px">次数: <strong>{{ currentRefundMember.remainingSessions }}/{{ currentRefundMember.totalSessions }}</strong></span>
         </el-form-item>
         <el-form-item label="退款金额" prop="amount">
           <el-input-number v-model="refundForm.amount" :min="0" :step="10" style="width: 100%" />
@@ -170,10 +191,15 @@
             <el-option v-for="m in consumptionStore.paymentMethods.filter(p => p.value !== 'balance')" :key="m.value" :label="m.label" :value="m.value" />
           </el-select>
         </el-form-item>
+        <el-form-item v-if="currentRefundMember" label="退款校验">
+          <el-tag :type="canRefund ? 'success' : 'danger'">
+            {{ canRefund ? '可以退款' : '退款超出账户余额/次数' }}
+          </el-tag>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="refundDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="submitRefund">确认退款</el-button>
+        <el-button type="danger" :disabled="!canRefund" @click="submitRefund">确认退款</el-button>
       </template>
     </el-dialog>
   </div>
@@ -231,11 +257,16 @@ const filteredTransactions = computed(() => {
 
 const rechargeDialogVisible = ref(false)
 const rechargeFormRef = ref()
+const currentRechargeMember = ref(null)
 const rechargeForm = reactive({ memberId: '', amount: 0, sessions: 0, method: 'wechat', remark: '' })
 const rechargeRules = {
   memberId: [{ required: true, message: '请选择会员', trigger: 'change' }],
   amount: [{ required: true, message: '请输入充值金额', trigger: 'blur' }],
   method: [{ required: true, message: '请选择支付方式', trigger: 'change' }]
+}
+
+function updateRechargeMemberInfo() {
+  currentRechargeMember.value = getMember(rechargeForm.memberId)
 }
 
 function openRechargeDialog() {
@@ -244,6 +275,7 @@ function openRechargeDialog() {
   rechargeForm.sessions = 0
   rechargeForm.method = 'wechat'
   rechargeForm.remark = ''
+  currentRechargeMember.value = null
   rechargeDialogVisible.value = true
 }
 
@@ -253,6 +285,7 @@ function submitRecharge() {
     memberStore.addBalance(rechargeForm.memberId, rechargeForm.amount)
     if (rechargeForm.sessions > 0) memberStore.addSessions(rechargeForm.memberId, rechargeForm.sessions)
     consumptionStore.addTransaction({ ...rechargeForm, type: 'recharge' })
+    updateRechargeMemberInfo()
     ElMessage.success('充值成功')
     rechargeDialogVisible.value = false
   })
@@ -260,6 +293,7 @@ function submitRecharge() {
 
 const consumeDialogVisible = ref(false)
 const consumeFormRef = ref()
+const currentConsumeMember = ref(null)
 const consumeForm = reactive({ memberId: '', amount: 0, sessions: 0, method: 'balance', remark: '' })
 const consumeRules = {
   memberId: [{ required: true, message: '请选择会员', trigger: 'change' }],
@@ -268,48 +302,96 @@ const consumeRules = {
   method: [{ required: true, message: '请选择支付方式', trigger: 'change' }]
 }
 
+const canConsumeBalance = computed(() => {
+  if (!currentConsumeMember.value || consumeForm.method !== 'balance') return true
+  return memberStore.hasEnoughBalance(consumeForm.memberId, consumeForm.amount)
+})
+
+const canConsumeSessions = computed(() => {
+  if (!currentConsumeMember.value || consumeForm.sessions <= 0) return true
+  return memberStore.hasEnoughSessions(consumeForm.memberId, consumeForm.sessions)
+})
+
+const canSubmitConsume = computed(() => {
+  return currentConsumeMember.value && canConsumeBalance.value && canConsumeSessions.value &&
+         consumeForm.amount > 0 && consumeForm.remark
+})
+
+function updateConsumeMemberInfo() {
+  currentConsumeMember.value = getMember(consumeForm.memberId)
+}
+
 function openConsumeDialog() {
   consumeForm.memberId = ''
   consumeForm.amount = 0
   consumeForm.sessions = 0
   consumeForm.method = 'balance'
   consumeForm.remark = ''
+  currentConsumeMember.value = null
   consumeDialogVisible.value = true
 }
 
 function submitConsume() {
   consumeFormRef.value.validate(valid => {
     if (!valid) return
-    const member = getMember(consumeForm.memberId)
-    if (consumeForm.method === 'balance') {
-      if (member.balance < consumeForm.amount) {
-        ElMessage.error('储值余额不足')
-        return
-      }
-      memberStore.deductBalance(consumeForm.memberId, consumeForm.amount)
+
+    if (consumeForm.method === 'balance' && !canConsumeBalance.value) {
+      ElMessage.error(`储值余额不足！需¥${consumeForm.amount}，当前仅有¥${currentConsumeMember.value.balance}`)
+      return
     }
-    if (consumeForm.sessions > 0) {
-      if (member.remainingSessions < consumeForm.sessions) {
-        ElMessage.error('剩余次数不足')
-        return
-      }
-      for (let i = 0; i < consumeForm.sessions; i++) {
-        memberStore.deductSession(consumeForm.memberId)
-      }
+    if (consumeForm.sessions > 0 && !canConsumeSessions.value) {
+      ElMessage.error(`剩余次数不足！需${consumeForm.sessions}次，当前仅有${currentConsumeMember.value.remainingSessions}次`)
+      return
     }
-    consumptionStore.addTransaction({ ...consumeForm, type: 'consume' })
-    ElMessage.success('消费登记成功')
-    consumeDialogVisible.value = false
+
+    ElMessageBox.confirm(
+      `确认扣除「${currentConsumeMember.value.name}」的${consumeForm.amount > 0 ? '¥' + consumeForm.amount : ''}${consumeForm.sessions > 0 ? ' ' + consumeForm.sessions + '次' : ''}吗？`,
+      '消费确认',
+      { type: 'warning' }
+    ).then(() => {
+      if (consumeForm.method === 'balance') {
+        const result = memberStore.deductBalance(consumeForm.memberId, consumeForm.amount)
+        if (!result) {
+          ElMessage.error('扣款失败，请检查账户余额')
+          return
+        }
+      }
+      if (consumeForm.sessions > 0) {
+        for (let i = 0; i < consumeForm.sessions; i++) {
+          const result = memberStore.deductSession(consumeForm.memberId)
+          if (!result) {
+            ElMessage.error('扣次失败，请检查剩余次数')
+            return
+          }
+        }
+      }
+      consumptionStore.addTransaction({ ...consumeForm, type: 'consume' })
+      updateConsumeMemberInfo()
+      ElMessage.success('消费登记成功')
+      consumeDialogVisible.value = false
+    }).catch(() => {})
   })
 }
 
 const refundDialogVisible = ref(false)
 const refundFormRef = ref()
+const currentRefundMember = ref(null)
 const refundForm = reactive({ memberId: '', amount: 0, sessions: 0, method: 'wechat', remark: '' })
 const refundRules = {
   memberId: [{ required: true, message: '请选择会员', trigger: 'change' }],
   amount: [{ required: true, message: '请输入退款金额', trigger: 'blur' }],
   remark: [{ required: true, message: '请输入退款原因', trigger: 'blur' }]
+}
+
+const canRefund = computed(() => {
+  if (!currentRefundMember.value) return false
+  if (refundForm.amount > currentRefundMember.value.balance) return false
+  if (refundForm.sessions > currentRefundMember.value.remainingSessions) return false
+  return refundForm.amount > 0 || refundForm.sessions > 0
+})
+
+function updateRefundMemberInfo() {
+  currentRefundMember.value = getMember(refundForm.memberId)
 }
 
 function openRefundDialog() {
@@ -318,16 +400,30 @@ function openRefundDialog() {
   refundForm.sessions = 0
   refundForm.method = 'wechat'
   refundForm.remark = ''
+  currentRefundMember.value = null
   refundDialogVisible.value = true
 }
 
 function submitRefund() {
   refundFormRef.value.validate(valid => {
     if (!valid) return
-    ElMessageBox.confirm('确认执行退款操作吗？', '退款确认', { type: 'warning' }).then(() => {
-      memberStore.addBalance(refundForm.memberId, -refundForm.amount)
-      if (refundForm.sessions > 0) memberStore.addSessions(refundForm.memberId, -refundForm.sessions)
+    if (!canRefund.value) {
+      ElMessage.error('退款金额/次数超出账户可用额度')
+      return
+    }
+    ElMessageBox.confirm(
+      `确认退还「${currentRefundMember.value.name}」${refundForm.amount > 0 ? '¥' + refundForm.amount : ''}${refundForm.sessions > 0 ? ' ' + refundForm.sessions + '次' : ''}吗？`,
+      '退款确认',
+      { type: 'warning' }
+    ).then(() => {
+      if (refundForm.amount > 0) {
+        memberStore.addBalance(refundForm.memberId, -refundForm.amount)
+      }
+      if (refundForm.sessions > 0) {
+        memberStore.addSessions(refundForm.memberId, -refundForm.sessions)
+      }
       consumptionStore.addTransaction({ ...refundForm, type: 'refund' })
+      updateRefundMemberInfo()
       ElMessage.success('退款成功')
       refundDialogVisible.value = false
     }).catch(() => {})

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import dayjs from 'dayjs'
+import { persist } from '@/utils/persist'
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
@@ -20,17 +21,11 @@ const PAYMENT_METHODS = [
   { value: 'balance', label: '储值余额' }
 ]
 
-const mockTransactions = [
-  { id: 'tx001', memberId: 'm001', type: 'recharge', amount: 2000, sessions: 50, method: 'wechat', date: dayjs().subtract(2, 'day').format('YYYY-MM-DD HH:mm'), remark: '充值50次送10次', operator: '前台' },
-  { id: 'tx002', memberId: 'm002', type: 'consume', amount: 300, sessions: 1, method: 'balance', date: dayjs().subtract(1, 'day').format('YYYY-MM-DD HH:mm'), remark: '私教课扣费', operator: '前台' },
-  { id: 'tx003', memberId: 'm003', type: 'recharge', amount: 500, sessions: 10, method: 'alipay', date: dayjs().subtract(3, 'day').format('YYYY-MM-DD HH:mm'), remark: '', operator: '前台' },
-  { id: 'tx004', memberId: 'm004', type: 'deduct', amount: 0, sessions: 1, method: 'balance', date: dayjs().format('YYYY-MM-DD HH:mm'), remark: '羽毛球基础班', operator: '前台' },
-  { id: 'tx005', memberId: 'm005', type: 'recharge', amount: 3000, sessions: 80, method: 'card', date: dayjs().subtract(5, 'day').format('YYYY-MM-DD HH:mm'), remark: '金卡续充', operator: '前台' }
-]
+const INITIAL_TRANSACTIONS = []
 
 export const useConsumptionStore = defineStore('consumption', {
   state: () => ({
-    transactions: [...mockTransactions],
+    transactions: [...INITIAL_TRANSACTIONS],
     txnTypes: TXN_TYPES,
     paymentMethods: PAYMENT_METHODS
   }),
@@ -61,10 +56,12 @@ export const useConsumptionStore = defineStore('consumption', {
         operator: '前台'
       }
       this.transactions.unshift(txn)
+      persist()
       return txn
     },
     deleteTransaction(id) {
       this.transactions = this.transactions.filter(t => t.id !== id)
+      persist()
     },
     getTransactionsByMember(memberId) {
       return this.transactions.filter(t => t.memberId === memberId)

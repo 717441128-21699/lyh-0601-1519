@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import dayjs from 'dayjs'
+import { persist } from '@/utils/persist'
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
@@ -12,16 +13,11 @@ const CHECKIN_STATUS = [
   { value: 'makeup', label: '补课', color: '#409eff', type: 'primary' }
 ]
 
-const today = dayjs().format('YYYY-MM-DD')
-const mockCheckins = [
-  { id: 'ci001', courseId: 'k001', memberId: 'm001', status: 'checked', checkTime: dayjs().format('YYYY-MM-DD HH:mm'), operator: '前台' },
-  { id: 'ci002', courseId: 'k001', memberId: 'm003', status: 'leave', checkTime: dayjs().subtract(1, 'hour').format('YYYY-MM-DD HH:mm'), operator: '前台', remark: '临时有事' },
-  { id: 'ci003', courseId: 'k002', memberId: 'm002', status: 'checked', checkTime: dayjs().format('YYYY-MM-DD HH:mm'), operator: '前台' }
-]
+const INITIAL_CHECKINS = []
 
 export const useCheckinStore = defineStore('checkin', {
   state: () => ({
-    checkins: [...mockCheckins],
+    checkins: [...INITIAL_CHECKINS],
     statusList: CHECKIN_STATUS
   }),
 
@@ -42,6 +38,7 @@ export const useCheckinStore = defineStore('checkin', {
           checkTime: dayjs().format('YYYY-MM-DD HH:mm'),
           id: existing.id
         })
+        persist()
         return existing
       }
       const record = {
@@ -51,16 +48,19 @@ export const useCheckinStore = defineStore('checkin', {
         operator: '前台'
       }
       this.checkins.unshift(record)
+      persist()
       return record
     },
     updateCheckin(id, data) {
       const index = this.checkins.findIndex(c => c.id === id)
       if (index !== -1) {
         this.checkins[index] = { ...this.checkins[index], ...data }
+        persist()
       }
     },
     deleteCheckin(id) {
       this.checkins = this.checkins.filter(c => c.id !== id)
+      persist()
     },
     getCheckinsByCourse(courseId) {
       return this.checkins.filter(c => c.courseId === courseId)
