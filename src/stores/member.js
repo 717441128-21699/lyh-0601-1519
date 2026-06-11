@@ -42,7 +42,8 @@ export const useMemberStore = defineStore('member', {
     members: [...INITIAL_MEMBERS],
     levels: LEVELS,
     packages: MEMBERSHIP_PACKAGES,
-    packageSales: [...INITIAL_PACKAGE_SALES]
+    packageSales: [...INITIAL_PACKAGE_SALES],
+    followRecords: []
   }),
 
   getters: {
@@ -108,17 +109,36 @@ export const useMemberStore = defineStore('member', {
       return { success: true, sale: saleRecord, member }
     },
     getPackageSalesStats() {
-      const stats = {}
+      let totalCount = 0
+      let totalAmount = 0
+      const byTypeMap = {
+        time: { typeLabel: '时间卡', type: 'time', count: 0, amount: 0 },
+        session: { typeLabel: '次卡', type: 'session', count: 0, amount: 0 },
+        private: { typeLabel: '私教包', type: 'private', count: 0, amount: 0 },
+        balance: { typeLabel: '储值卡', type: 'balance', count: 0, amount: 0 }
+      }
+      const byPackageMap = {}
       MEMBERSHIP_PACKAGES.forEach(pkg => {
-        stats[pkg.id] = { name: pkg.name, type: pkg.type, count: 0, amount: 0 }
+        byPackageMap[pkg.id] = { name: pkg.name, type: pkg.type, count: 0, amount: 0 }
       })
       this.packageSales.forEach(sale => {
-        if (stats[sale.packageId]) {
-          stats[sale.packageId].count += 1
-          stats[sale.packageId].amount += sale.amount
+        totalCount += 1
+        totalAmount += sale.amount
+        if (byTypeMap[sale.packageType]) {
+          byTypeMap[sale.packageType].count += 1
+          byTypeMap[sale.packageType].amount += sale.amount
+        }
+        if (byPackageMap[sale.packageId]) {
+          byPackageMap[sale.packageId].count += 1
+          byPackageMap[sale.packageId].amount += sale.amount
         }
       })
-      return Object.values(stats).filter(s => s.count > 0 || s.amount > 0)
+      return {
+        totalCount,
+        totalAmount,
+        byType: Object.values(byTypeMap),
+        byPackage: Object.values(byPackageMap).filter(p => p.count > 0 || p.amount > 0)
+      }
     },
     getPackageSalesByDate(date) {
       return this.packageSales.filter(s => s.date.startsWith(date))
@@ -239,6 +259,49 @@ export const useMemberStore = defineStore('member', {
         result.push({ month: month.format('MM月'), count })
       }
       return result
+    },
+    addFollowRecord(memberId, content, type = 'visit') {
+      const member = this.getMemberById(memberId)
+      if (!member) return null
+      const record = {
+        id: generateId(),
+        memberId,
+        memberName: member.name,
+        content,
+        type,
+        date: dayjs().format('YYYY-MM-DD HH:mm')
+      }
+      this.followRecords.unshift(record)
+      persist()
+      return record
+    },
+    getFollowRecordsByMember(memberId) {
+      return this.followRecords.filter(r => r.memberId === memberId)
+    },
+    getRecentPackageBuyers(days = 30) {
+      const cutoff = dayjs().subtract(days, 'day')
+      return this.packageSales
+        .filter(s => dayjs(s.date).isAfter(cutoff))
+        .map(sale => {
+          const member = this.getMemberById(sale.memberId)
+          return { ...sale, memberInfo: member || null }
+        })
+    },
+    async getLongAbsentMembers(days = 30) {
+      const { useCheckinStore } = await import('@/stores/checkin')
+      const checkinStore = useCheckinStore()
+      const cutoff = dayjs().subtract(days, 'day')
+      return this.members.map(member => {
+        const memberCheckins = checkinStore.getCheckinsByMember(member.id)
+        if (memberCheckins.length === 0) {
+          return { ...member, lastCheckin: null, absentDays: Infinity }
+        }
+        const lastCheckin = memberCheckins.reduce((latest, c) => {
+          return dayjs(c.checkTime).isAfter(dayjs(latest)) ? c.checkTime : latest
+        }, memberCheckins[0].checkTime)
+        const absentDays = dayjs().diff(dayjs(lastCheckin), 'day')
+        return { ...member, lastCheckin, absentDays }
+      }).filter(m => m.absentDays >= days)
     }
   }
 })

@@ -7,8 +7,11 @@
           <el-tab-pane label="综合统计" name="overview" />
           <el-tab-pane label="前台日报" name="daily" />
           <el-tab-pane label="套餐销售" name="packages" />
+          <el-tab-pane label="会员运营" name="operations" />
+          <el-tab-pane label="教练结算" name="coach" />
+          <el-tab-pane label="数据备份" name="backup" />
         </el-tabs>
-        <el-select v-if="activeTab !== 'daily'" v-model="statRange" style="width: 150px; margin-right: 12px">
+        <el-select v-if="activeTab !== 'daily' && activeTab !== 'operations' && activeTab !== 'coach' && activeTab !== 'backup'" v-model="statRange" style="width: 150px; margin-right: 12px">
           <el-option label="近7天" value="7" />
           <el-option label="近30天" value="30" />
           <el-option label="本月" value="month" />
@@ -20,9 +23,8 @@
         </el-button>
       </div>
     </div>
-    
-    <div v-if="activeTab === 'overview'">
 
+    <div v-if="activeTab === 'overview'">
     <el-row :gutter="20" style="margin-bottom: 20px">
       <el-col :span="4">
         <div class="stat-card">
@@ -167,14 +169,14 @@
       </el-col>
     </el-row>
     </div>
-    
+
     <div v-if="activeTab === 'daily'">
       <div class="daily-report">
         <div class="report-header">
           <h2>前台日报 - {{ dailyDateStr }}</h2>
           <div class="report-meta">打印时间：{{ dayjs().format('YYYY-MM-DD HH:mm:ss') }}</div>
         </div>
-        
+
         <el-row :gutter="20" style="margin-bottom: 20px">
           <el-col :span="4">
             <div class="stat-card">
@@ -213,7 +215,7 @@
             </div>
           </el-col>
         </el-row>
-        
+
         <el-row :gutter="20">
           <el-col :span="12">
             <div class="card-wrapper">
@@ -253,7 +255,7 @@
             </div>
           </el-col>
         </el-row>
-        
+
         <el-row :gutter="20" style="margin-top: 20px">
           <el-col :span="12">
             <div class="card-wrapper">
@@ -290,7 +292,7 @@
             </div>
           </el-col>
         </el-row>
-        
+
         <div class="report-footer no-print" style="margin-top: 30px; text-align: center">
           <el-button type="primary" size="large" @click="printDailyReport">
             <el-icon><Printer /></el-icon>打印交班单
@@ -298,7 +300,7 @@
         </div>
       </div>
     </div>
-    
+
     <div v-if="activeTab === 'packages'">
       <el-row :gutter="20" style="margin-bottom: 20px">
         <el-col :span="6">
@@ -326,7 +328,7 @@
           </div>
         </el-col>
       </el-row>
-      
+
       <el-row :gutter="20">
         <el-col :span="12">
           <div class="card-wrapper">
@@ -341,7 +343,7 @@
           </div>
         </el-col>
       </el-row>
-      
+
       <el-row :gutter="20" style="margin-top: 20px">
         <el-col :span="24">
           <div class="card-wrapper">
@@ -349,27 +351,203 @@
             <el-table :data="packageSalesList" size="small" style="width: 100%" max-height="400">
               <el-table-column prop="memberName" label="会员" width="100" />
               <el-table-column prop="packageName" label="套餐名称" min-width="150" />
-              <el-table-column prop="type" label="类型" width="100">
+              <el-table-column prop="packageType" label="类型" width="100">
                 <template #default="{ row }">
-                  <el-tag :type="row.type === 'time' ? 'primary' : row.type === 'session' ? 'success' : row.type === 'private' ? 'warning' : 'info'" size="small">
+                  <el-tag :type="row.packageType === 'time' ? 'primary' : row.packageType === 'session' ? 'success' : row.packageType === 'private' ? 'warning' : 'info'" size="small">
                     {{ row.typeLabel }}
                   </el-tag>
                 </template>
               </el-table-column>
               <el-table-column label="价格" width="100" align="right">
-                <template #default="{ row }">¥{{ row.price.toFixed(2) }}</template>
+                <template #default="{ row }">¥{{ row.amount.toFixed(2) }}</template>
               </el-table-column>
               <el-table-column prop="paymentMethod" label="支付方式" width="100">
                 <template #default="{ row }">
                   <el-tag type="info" size="small">{{ row.paymentMethodLabel }}</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="saleTime" label="购买时间" width="160" />
+              <el-table-column prop="date" label="购买时间" width="160" />
             </el-table>
           </div>
         </el-col>
       </el-row>
     </div>
+
+    <div v-if="activeTab === 'operations'">
+      <el-row :gutter="20" style="margin-bottom: 20px">
+        <el-col :span="6">
+          <div class="stat-card">
+            <div class="label">快到期会员数</div>
+            <div class="value orange">{{ operationsStats.expiring }}</div>
+          </div>
+        </el-col>
+        <el-col :span="6">
+          <div class="stat-card">
+            <div class="label">低次数会员数</div>
+            <div class="value red">{{ operationsStats.lowSession }}</div>
+          </div>
+        </el-col>
+        <el-col :span="6">
+          <div class="stat-card">
+            <div class="label">长期未到店会员数</div>
+            <div class="value" style="color: #909399">{{ operationsStats.longAbsent }}</div>
+          </div>
+        </el-col>
+        <el-col :span="6">
+          <div class="stat-card">
+            <div class="label">近30天购套餐会员数</div>
+            <div class="value green">{{ operationsStats.recentBuyers }}</div>
+          </div>
+        </el-col>
+      </el-row>
+
+      <div class="card-wrapper">
+        <h4 style="margin-bottom: 16px">会员运营列表</h4>
+        <el-table :data="operationsMemberList" size="small" style="width: 100%" max-height="500">
+          <el-table-column prop="name" label="姓名" width="100" />
+          <el-table-column prop="phone" label="电话" width="130" />
+          <el-table-column label="类型标签" width="120">
+            <template #default="{ row }">
+              <el-tag v-for="tag in row.tags" :key="tag" :type="operationsTagType(tag)" size="small" style="margin-right: 4px">
+                {{ tag }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="详细信息" min-width="200">
+            <template #default="{ row }">{{ row.detailInfo }}</template>
+          </el-table-column>
+          <el-table-column label="最近跟进" min-width="200">
+            <template #default="{ row }">
+              <span v-if="row.latestFollow">{{ row.latestFollow.type }} - {{ row.latestFollow.content }}</span>
+              <span v-else style="color: #c0c4cc">暂无跟进</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" align="center">
+            <template #default="{ row }">
+              <el-button type="primary" link size="small" @click="openFollowDialog(row)">跟进</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </div>
+
+    <div v-if="activeTab === 'coach'">
+      <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 12px">
+        <el-date-picker v-model="coachMonth" type="month" placeholder="选择月份" style="width: 180px" />
+        <el-button type="primary" @click="loadCoachSettlement">查询</el-button>
+        <el-button @click="printCoachSettlement">打印结算单</el-button>
+        <el-button @click="exportCoachCSV">导出CSV</el-button>
+      </div>
+      <div class="card-wrapper">
+        <el-table :data="coachSettlementData" size="small" style="width: 100%" show-summary>
+          <el-table-column prop="coachName" label="教练" width="100" fixed />
+          <el-table-column label="团课" align="center">
+            <el-table-column prop="groupHours" label="课时" width="80" align="center" />
+            <el-table-column prop="groupCount" label="人次" width="80" align="center" />
+            <el-table-column prop="groupCommission" label="提成" width="100" align="right">
+              <template #default="{ row }">¥{{ row.groupCommission.toFixed(2) }}</template>
+            </el-table-column>
+          </el-table-column>
+          <el-table-column label="私教" align="center">
+            <el-table-column prop="privateHours" label="课时" width="80" align="center" />
+            <el-table-column prop="privateCount" label="人次" width="80" align="center" />
+            <el-table-column prop="privateCommission" label="提成" width="100" align="right">
+              <template #default="{ row }">¥{{ row.privateCommission.toFixed(2) }}</template>
+            </el-table-column>
+          </el-table-column>
+          <el-table-column label="活动" align="center">
+            <el-table-column prop="activityHours" label="课时" width="80" align="center" />
+            <el-table-column prop="activityCount" label="人次" width="80" align="center" />
+            <el-table-column prop="activityCommission" label="提成" width="100" align="right">
+              <template #default="{ row }">¥{{ row.activityCommission.toFixed(2) }}</template>
+            </el-table-column>
+          </el-table-column>
+          <el-table-column prop="totalHours" label="总课时" width="90" align="center" />
+          <el-table-column prop="totalCommission" label="总提成" width="120" align="right">
+            <template #default="{ row }">
+              <span style="font-weight: bold; color: #e6a23c">¥{{ row.totalCommission.toFixed(2) }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </div>
+
+    <div v-if="activeTab === 'backup'">
+      <el-row :gutter="20" style="margin-bottom: 20px">
+        <el-col :span="6">
+          <div class="stat-card">
+            <div class="label">会员数</div>
+            <div class="value blue">{{ memberStore.members.length }}</div>
+          </div>
+        </el-col>
+        <el-col :span="6">
+          <div class="stat-card">
+            <div class="label">课程数</div>
+            <div class="value">{{ courseStore.courses.length }}</div>
+          </div>
+        </el-col>
+        <el-col :span="6">
+          <div class="stat-card">
+            <div class="label">交易数</div>
+            <div class="value green">{{ consumptionStore.transactions.length }}</div>
+          </div>
+        </el-col>
+        <el-col :span="6">
+          <div class="stat-card">
+            <div class="label">签到数</div>
+            <div class="value orange">{{ checkinStore.checkins.length }}</div>
+          </div>
+        </el-col>
+      </el-row>
+      <div class="card-wrapper">
+        <h4 style="margin-bottom: 16px">数据备份与恢复</h4>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <div style="padding: 20px; border: 1px solid #ebeef5; border-radius: 8px; text-align: center">
+              <el-icon :size="48" style="color: #67c23a; margin-bottom: 12px"><Download /></el-icon>
+              <h3>导出备份</h3>
+              <p style="color: #909399; margin: 8px 0 16px">将所有数据导出为 JSON 文件下载保存</p>
+              <el-button type="success" @click="exportBackup">导出备份</el-button>
+            </div>
+          </el-col>
+          <el-col :span="12">
+            <div style="padding: 20px; border: 1px solid #ebeef5; border-radius: 8px; text-align: center">
+              <el-icon :size="48" style="color: #409eff; margin-bottom: 12px"><Upload /></el-icon>
+              <h3>导入恢复</h3>
+              <p style="color: #909399; margin: 8px 0 16px">选择 JSON 文件恢复数据（将覆盖当前数据）</p>
+              <el-button type="primary" @click="triggerImportBackup">导入恢复</el-button>
+              <input ref="importFileRef" type="file" accept=".json" style="display: none" @change="importBackup" />
+            </div>
+          </el-col>
+        </el-row>
+        <div style="margin-top: 30px; text-align: center">
+          <el-button type="danger" @click="clearAllData">清空所有数据</el-button>
+        </div>
+      </div>
+    </div>
+
+    <el-dialog v-model="followDialogVisible" title="会员跟进" width="500px">
+      <el-form label-width="80px">
+        <el-form-item label="会员">
+          <span>{{ followTargetMember?.name }}</span>
+        </el-form-item>
+        <el-form-item label="跟进类型">
+          <el-select v-model="followForm.type" style="width: 100%">
+            <el-option label="到店邀约" value="到店邀约" />
+            <el-option label="电话回访" value="电话回访" />
+            <el-option label="微信提醒" value="微信提醒" />
+            <el-option label="其他" value="其他" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="跟进内容">
+          <el-input v-model="followForm.content" type="textarea" :rows="4" placeholder="请输入跟进内容" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="followDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveFollowRecord">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -380,7 +558,7 @@ import { useMemberStore } from '@/stores/member'
 import { useCourseStore } from '@/stores/course'
 import { useConsumptionStore } from '@/stores/consumption'
 import { useCheckinStore } from '@/stores/checkin'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 
 const memberStore = useMemberStore()
@@ -437,16 +615,16 @@ const getCourseName = (courseId) => {
 }
 
 const dailyStats = computed(() => {
-  const enrollments = courseStore.enrollments.filter(e => isSameDay(e.enrolledAt))
+  const enrollments = courseStore.enrollments.filter(e => isSameDay(e.enrollDate))
   const checkins = checkinStore.checkins.filter(c => isSameDay(c.checkTime))
-  const recharges = consumptionStore.transactions.filter(t => t.type === 'recharge' && isSameDay(t.createdAt))
-  const refunds = consumptionStore.transactions.filter(t => t.type === 'refund' && isSameDay(t.createdAt))
-  const deducts = consumptionStore.transactions.filter(t => t.type === 'deduct' && isSameDay(t.createdAt))
-  
+  const recharges = consumptionStore.transactions.filter(t => t.type === 'recharge' && isSameDay(t.date))
+  const refunds = consumptionStore.transactions.filter(t => t.type === 'refund' && isSameDay(t.date))
+  const deducts = consumptionStore.transactions.filter(t => t.type === 'deduct' && isSameDay(t.date))
+
   const rechargeTotal = recharges.reduce((sum, t) => sum + t.amount, 0)
   const refundTotal = refunds.reduce((sum, t) => sum + t.amount, 0)
   const sessionsDeducted = deducts.reduce((sum, t) => sum + t.sessions, 0)
-  
+
   return {
     newEnrollments: enrollments.length,
     checkins: checkins.filter(c => c.status === 'checked' || c.status === 'makeup').length,
@@ -459,44 +637,44 @@ const dailyStats = computed(() => {
 
 const dailyRechargeList = computed(() => {
   return consumptionStore.transactions
-    .filter(t => t.type === 'recharge' && isSameDay(t.createdAt))
+    .filter(t => t.type === 'recharge' && isSameDay(t.date))
     .map(t => ({
       ...t,
       memberName: getMemberName(t.memberId),
-      time: dayjs(t.createdAt).format('YYYY-MM-DD HH:mm:ss')
+      time: dayjs(t.date).format('YYYY-MM-DD HH:mm:ss')
     }))
-    .sort((a, b) => b.createdAt - a.createdAt)
+    .sort((a, b) => b.date.localeCompare(a.date))
 })
 
 const dailyConsumeList = computed(() => {
   return consumptionStore.transactions
-    .filter(t => t.type === 'consume' && isSameDay(t.createdAt))
+    .filter(t => t.type === 'consume' && isSameDay(t.date))
     .map(t => ({
       ...t,
       memberName: getMemberName(t.memberId),
-      time: dayjs(t.createdAt).format('YYYY-MM-DD HH:mm:ss')
+      time: dayjs(t.date).format('YYYY-MM-DD HH:mm:ss')
     }))
-    .sort((a, b) => b.createdAt - a.createdAt)
+    .sort((a, b) => b.date.localeCompare(a.date))
 })
 
 const dailyRefundList = computed(() => {
   return consumptionStore.transactions
-    .filter(t => t.type === 'refund' && isSameDay(t.createdAt))
+    .filter(t => t.type === 'refund' && isSameDay(t.date))
     .map(t => ({
       ...t,
       memberName: getMemberName(t.memberId),
-      time: dayjs(t.createdAt).format('YYYY-MM-DD HH:mm:ss')
+      time: dayjs(t.date).format('YYYY-MM-DD HH:mm:ss')
     }))
-    .sort((a, b) => b.createdAt - a.createdAt)
+    .sort((a, b) => b.date.localeCompare(a.date))
 })
 
 const dailyCheckinList = computed(() => {
   return checkinStore.checkins
     .filter(c => isSameDay(c.checkTime))
     .map(c => {
-      const hasDeduct = consumptionStore.transactions.find(t => 
-        t.memberId === c.memberId && 
-        t.courseId === c.courseId && 
+      const hasDeduct = consumptionStore.transactions.find(t =>
+        t.memberId === c.memberId &&
+        t.courseId === c.courseId &&
         t.type === 'deduct'
       )
       return {
@@ -508,20 +686,19 @@ const dailyCheckinList = computed(() => {
         time: dayjs(c.checkTime).format('YYYY-MM-DD HH:mm:ss')
       }
     })
-    .sort((a, b) => b.checkTime - a.checkTime)
+    .sort((a, b) => b.checkTime.localeCompare(a.checkTime))
 })
 
 const packageSalesList = computed(() => {
-  const typeLabels = { time: '时间卡', session: '次卡', private: '私教包', stored: '储值卡' }
+  const typeLabels = { time: '时间卡', session: '次卡', private: '私教包', balance: '储值卡' }
   const methodLabels = { wechat: '微信', alipay: '支付宝', cash: '现金', card: '刷卡', balance: '余额' }
-  
+
   return memberStore.packageSales.map(s => ({
     ...s,
     memberName: getMemberName(s.memberId),
-    typeLabel: typeLabels[s.type] || s.type,
-    paymentMethodLabel: methodLabels[s.paymentMethod] || s.paymentMethod,
-    saleTime: dayjs(s.saleTime).format('YYYY-MM-DD HH:mm:ss')
-  })).sort((a, b) => b.saleTime - a.saleTime)
+    typeLabel: typeLabels[s.packageType] || s.packageType,
+    paymentMethodLabel: methodLabels[s.paymentMethod] || s.paymentMethod
+  })).sort((a, b) => b.date.localeCompare(a.date))
 })
 
 const packageSalesStats = computed(() => {
@@ -532,6 +709,185 @@ const packageSalesStats = computed(() => {
     topPackage: stats.byPackage[0] || null
   }
 })
+
+const operationsStats = computed(() => {
+  const expiring = memberStore.getExpiringMembers().length
+  const lowSession = memberStore.members.filter(m => m.remainingSessions < 5).length
+  const recentBuyers = memberStore.getRecentPackageBuyers(30)
+  const uniqueBuyerIds = [...new Set(recentBuyers.map(b => b.memberId))]
+  return {
+    expiring,
+    lowSession,
+    longAbsent: longAbsentMembers.value.length,
+    recentBuyers: uniqueBuyerIds.length
+  }
+})
+
+const longAbsentMembers = ref([])
+
+const operationsMemberList = computed(() => {
+  const expiring = memberStore.getExpiringMembers()
+  const expiringIds = new Set(expiring.map(m => m.id))
+  const lowSessionMembers = memberStore.members.filter(m => m.remainingSessions < 5)
+  const lowSessionIds = new Set(lowSessionMembers.map(m => m.id))
+  const recentBuyers = memberStore.getRecentPackageBuyers(30)
+  const buyerIds = new Set(recentBuyers.map(b => b.memberId))
+  const absentIds = new Set(longAbsentMembers.value.map(m => m.id))
+
+  const allIds = new Set([...expiringIds, ...lowSessionIds, ...buyerIds, ...absentIds])
+  return memberStore.members
+    .filter(m => allIds.has(m.id))
+    .map(m => {
+      const tags = []
+      const details = []
+      if (expiringIds.has(m.id)) {
+        tags.push('快到期')
+        const exp = expiring.find(e => e.id === m.id)
+        if (exp) details.push(`剩余${exp.daysLeft}天`)
+      }
+      if (lowSessionIds.has(m.id)) {
+        tags.push('低次数')
+        details.push(`剩余${m.remainingSessions}次`)
+      }
+      if (absentIds.has(m.id)) {
+        tags.push('长期未到')
+        const abs = longAbsentMembers.value.find(a => a.id === m.id)
+        if (abs) details.push(`未到店${abs.absentDays}天`)
+      }
+      if (buyerIds.has(m.id)) {
+        tags.push('新购套餐')
+        const sale = recentBuyers.find(b => b.memberId === m.id)
+        if (sale) details.push(`购${sale.packageName}`)
+      }
+      const records = memberStore.getFollowRecordsByMember(m.id)
+      const latestFollow = records.length > 0 ? records[0] : null
+      return {
+        ...m,
+        tags,
+        detailInfo: details.join(' / '),
+        latestFollow
+      }
+    })
+})
+
+const operationsTagType = (tag) => {
+  const map = { '快到期': 'warning', '低次数': 'danger', '长期未到': 'info', '新购套餐': 'success' }
+  return map[tag] || 'info'
+}
+
+const followDialogVisible = ref(false)
+const followTargetMember = ref(null)
+const followForm = ref({ type: '到店邀约', content: '' })
+
+const openFollowDialog = (member) => {
+  followTargetMember.value = member
+  followForm.value = { type: '到店邀约', content: '' }
+  followDialogVisible.value = true
+}
+
+const saveFollowRecord = () => {
+  if (!followForm.value.content) {
+    ElMessage.warning('请输入跟进内容')
+    return
+  }
+  memberStore.addFollowRecord(followTargetMember.value.id, followForm.value.content, followForm.value.type)
+  ElMessage.success('跟进记录已保存')
+  followDialogVisible.value = false
+}
+
+const coachMonth = ref(dayjs().toDate())
+const coachSettlementData = ref([])
+
+const loadCoachSettlement = async () => {
+  const month = dayjs(coachMonth.value).format('YYYY-MM')
+  coachSettlementData.value = await courseStore.getCoachSettlement(month)
+}
+
+const printCoachSettlement = () => {
+  const month = dayjs(coachMonth.value).format('YYYY-MM')
+  const printWindow = window.open('', '_blank')
+  let tableHtml = '<table><thead><tr><th>教练</th><th>团课课时</th><th>团课人次</th><th>团课提成</th><th>私教课时</th><th>私教人次</th><th>私教提成</th><th>活动课时</th><th>活动人次</th><th>活动提成</th><th>总课时</th><th>总提成</th></tr></thead><tbody>'
+  coachSettlementData.value.forEach(row => {
+    tableHtml += `<tr><td>${row.coachName}</td><td>${row.groupHours}</td><td>${row.groupCount}</td><td>¥${row.groupCommission.toFixed(2)}</td><td>${row.privateHours}</td><td>${row.privateCount}</td><td>¥${row.privateCommission.toFixed(2)}</td><td>${row.activityHours}</td><td>${row.activityCount}</td><td>¥${row.activityCommission.toFixed(2)}</td><td>${row.totalHours}</td><td>¥${row.totalCommission.toFixed(2)}</td></tr>`
+  })
+  tableHtml += '</tbody></table>'
+  printWindow.document.write(`<html><head><title>教练结算单 - ${month}</title><style>body{font-family:'Microsoft YaHei',sans-serif;padding:20px;font-size:12px}h2{text-align:center}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ddd;padding:8px;text-align:center}th{background:#f5f5f5}</style></head><body><h2>教练结算单 - ${month}</h2>${tableHtml}</body></html>`)
+  printWindow.document.close()
+  printWindow.focus()
+  setTimeout(() => printWindow.print(), 300)
+}
+
+const exportCoachCSV = () => {
+  const month = dayjs(coachMonth.value).format('YYYY-MM')
+  const header = '教练,团课课时,团课人次,团课提成,私教课时,私教人次,私教提成,活动课时,活动人次,活动提成,总课时,总提成\n'
+  const rows = coachSettlementData.value.map(r =>
+    `${r.coachName},${r.groupHours},${r.groupCount},${r.groupCommission.toFixed(2)},${r.privateHours},${r.privateCount},${r.privateCommission.toFixed(2)},${r.activityHours},${r.activityCount},${r.activityCommission.toFixed(2)},${r.totalHours},${r.totalCommission.toFixed(2)}`
+  ).join('\n')
+  const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `教练结算_${month}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success('CSV已导出')
+}
+
+const importFileRef = ref(null)
+
+const exportBackup = () => {
+  const data = {}
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    data[key] = localStorage.getItem(key)
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `场馆数据备份_${dayjs().format('YYYY-MM-DD_HHmmss')}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success('备份文件已下载')
+}
+
+const triggerImportBackup = () => {
+  importFileRef.value?.click()
+}
+
+const importBackup = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result)
+      ElMessageBox.confirm('导入将覆盖当前所有数据，是否继续？', '警告', { type: 'warning' })
+        .then(() => {
+          Object.keys(data).forEach(key => {
+            localStorage.setItem(key, data[key])
+          })
+          ElMessage.success('数据已恢复，请刷新页面')
+          setTimeout(() => location.reload(), 1000)
+        })
+        .catch(() => {})
+    } catch {
+      ElMessage.error('文件格式错误，请选择有效的备份文件')
+    }
+  }
+  reader.readAsText(file)
+  event.target.value = ''
+}
+
+const clearAllData = () => {
+  ElMessageBox.confirm('此操作将清空所有数据且不可恢复，是否继续？', '危险操作', { type: 'error', confirmButtonText: '确认清空', cancelButtonText: '取消' })
+    .then(() => {
+      localStorage.clear()
+      ElMessage.success('数据已清空，请刷新页面')
+      setTimeout(() => location.reload(), 1000)
+    })
+    .catch(() => {})
+}
 
 const memberGrowthChartRef = ref(null)
 const incomeTrendChartRef = ref(null)
@@ -718,7 +1074,6 @@ function printReport() {
 function printDailyReport() {
   const printContent = document.querySelector('.daily-report')
   if (printContent) {
-    const originalContents = document.body.innerHTML
     const printWindow = window.open('', '_blank')
     printWindow.document.write(`
       <html>
@@ -777,6 +1132,10 @@ function printDailyReport() {
   }
 }
 
+const loadLongAbsentMembers = async () => {
+  longAbsentMembers.value = await memberStore.getLongAbsentMembers(30)
+}
+
 watch(activeTab, (newTab) => {
   nextTick(() => {
     charts.forEach(c => c.dispose())
@@ -785,6 +1144,10 @@ watch(activeTab, (newTab) => {
       initCharts()
     } else if (newTab === 'packages') {
       initPackageCharts()
+    } else if (newTab === 'operations') {
+      loadLongAbsentMembers()
+    } else if (newTab === 'coach') {
+      loadCoachSettlement()
     }
   })
 })
@@ -831,27 +1194,27 @@ onBeforeUnmount(() => {
   .no-print {
     display: none !important;
   }
-  
+
   .daily-report {
     padding: 0;
   }
-  
+
   .stat-card {
     break-inside: avoid;
     border: 1px solid #ddd !important;
     margin-bottom: 10px !important;
   }
-  
+
   .card-wrapper {
     break-inside: avoid;
     border: 1px solid #ddd !important;
     margin-bottom: 15px !important;
   }
-  
+
   .el-table {
     font-size: 11px !important;
   }
-  
+
   .el-table th, .el-table td {
     padding: 4px 8px !important;
   }

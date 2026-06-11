@@ -15,10 +15,10 @@ const COURSE_TYPES = [
 const SPORTS = ['羽毛球', '篮球', '乒乓球', '网球', '游泳', '瑜伽', '健身']
 
 const COACHES = [
-  { id: 'c001', name: '李明', sport: '羽毛球', phone: '13900139001' },
-  { id: 'c002', name: '王芳', sport: '羽毛球', phone: '13900139002' },
-  { id: 'c003', name: '赵磊', sport: '篮球', phone: '13900139003' },
-  { id: 'c004', name: '孙丽', sport: '瑜伽', phone: '13900139004' }
+  { id: 'c001', name: '李明', sport: '羽毛球', phone: '13900139001', hourlyRate: 100, privateRate: 200 },
+  { id: 'c002', name: '王芳', sport: '羽毛球', phone: '13900139002', hourlyRate: 100, privateRate: 200 },
+  { id: 'c003', name: '赵磊', sport: '篮球', phone: '13900139003', hourlyRate: 100, privateRate: 200 },
+  { id: 'c004', name: '孙丽', sport: '瑜伽', phone: '13900139004', hourlyRate: 100, privateRate: 200 }
 ]
 
 const today = dayjs()
@@ -299,6 +299,55 @@ export const useCourseStore = defineStore('course', {
           name: c.name.slice(0, 8),
           rate: c.capacity > 0 ? Math.round(c.enrolled / c.capacity * 100) : 0
         }))
+    },
+    async getCoachSettlement(month) {
+      const { useCheckinStore } = await import('@/stores/checkin')
+      const checkinStore = useCheckinStore()
+      return this.coaches.map(coach => {
+        const coachCourses = this.courses.filter(c => c.coachId === coach.id && dayjs(c.date).format('YYYY-MM') === month)
+        let groupHours = 0, groupCount = 0
+        let privateHours = 0, privateCount = 0
+        let activityHours = 0, activityCount = 0
+        coachCourses.forEach(course => {
+          const [sh, sm] = course.startTime.split(':').map(Number)
+          const [eh, em] = course.endTime.split(':').map(Number)
+          const hours = (eh * 60 + em - sh * 60 - sm) / 60
+          const courseCheckins = checkinStore.checkins.filter(c =>
+            c.courseId === course.id && (c.status === 'checked' || c.status === 'makeup')
+          )
+          const count = courseCheckins.length
+          if (course.type === 'group') {
+            groupHours += hours
+            groupCount += count
+          } else if (course.type === 'private') {
+            privateHours += hours
+            privateCount += count
+          } else if (course.type === 'activity') {
+            activityHours += hours
+            activityCount += count
+          }
+        })
+        const groupCommission = groupHours * coach.hourlyRate
+        const privateCommission = privateHours * coach.privateRate
+        const activityCommission = activityHours * coach.hourlyRate * 0.5
+        const totalHours = groupHours + privateHours + activityHours
+        const totalCommission = groupCommission + privateCommission + activityCommission
+        return {
+          coachId: coach.id,
+          coachName: coach.name,
+          groupHours: Math.round(groupHours * 10) / 10,
+          groupCount,
+          privateHours: Math.round(privateHours * 10) / 10,
+          privateCount,
+          activityHours: Math.round(activityHours * 10) / 10,
+          activityCount,
+          totalHours: Math.round(totalHours * 10) / 10,
+          groupCommission: Math.round(groupCommission * 100) / 100,
+          privateCommission: Math.round(privateCommission * 100) / 100,
+          activityCommission: Math.round(activityCommission * 100) / 100,
+          totalCommission: Math.round(totalCommission * 100) / 100
+        }
+      })
     }
   }
 })

@@ -23,6 +23,9 @@ export function initStores() {
     if (data.packageSales && data.packageSales.length > 0) {
       memberStore.$patch({ packageSales: data.packageSales })
     }
+    if (data.followRecords && data.followRecords.length > 0) {
+      memberStore.$patch({ followRecords: data.followRecords })
+    }
     if (data.courses && data.courses.length > 0) {
       courseStore.$patch({ courses: data.courses })
     }
@@ -57,6 +60,7 @@ export function persist() {
     storage.saveData({
       members: memberStore.members,
       packageSales: memberStore.packageSales,
+      followRecords: memberStore.followRecords,
       courses: courseStore.courses,
       enrollments: courseStore.enrollments,
       waitlists: courseStore.waitlists || [],
