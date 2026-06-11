@@ -5,13 +5,21 @@
       <div class="no-print">
         <el-tabs v-model="activeTab" style="margin-right: 20px">
           <el-tab-pane label="综合统计" name="overview" />
+          <el-tab-pane label="经营复盘" name="review" />
           <el-tab-pane label="前台日报" name="daily" />
           <el-tab-pane label="套餐销售" name="packages" />
           <el-tab-pane label="会员运营" name="operations" />
           <el-tab-pane label="教练结算" name="coach" />
           <el-tab-pane label="数据备份" name="backup" />
         </el-tabs>
-        <el-select v-if="activeTab !== 'daily' && activeTab !== 'operations' && activeTab !== 'coach' && activeTab !== 'backup'" v-model="statRange" style="width: 150px; margin-right: 12px">
+        <el-select v-if="activeTab === 'review'" v-model="reviewGranularity" style="width: 120px; margin-right: 12px">
+          <el-option label="按周" value="week" />
+          <el-option label="按月" value="month" />
+        </el-select>
+        <el-select v-if="activeTab === 'review'" v-model="reviewPeriod" style="width: 160px; margin-right: 12px">
+          <el-option v-for="opt in reviewPeriodOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
+        </el-select>
+        <el-select v-if="activeTab !== 'daily' && activeTab !== 'operations' && activeTab !== 'coach' && activeTab !== 'backup' && activeTab !== 'review'" v-model="statRange" style="width: 150px; margin-right: 12px">
           <el-option label="近7天" value="7" />
           <el-option label="近30天" value="30" />
           <el-option label="本月" value="month" />
@@ -170,6 +178,114 @@
     </el-row>
     </div>
 
+    <div v-if="activeTab === 'review'">
+      <el-row :gutter="20" style="margin-bottom: 20px">
+        <el-col :span="4">
+          <div class="stat-card clickable" @click="openReviewDetail('newMember')">
+            <div class="label">新增会员 <el-icon style="vertical-align: middle; font-size: 14px; margin-left: 4px"><ArrowRight /></el-icon></div>
+            <div class="value blue">{{ reviewMetrics.newMembers }}</div>
+            <div class="trend" :style="{ color: reviewCompare.newMembers >= 0 ? '#67c23a' : '#f56c6c' }">
+              {{ reviewCompare.newMembers >= 0 ? '↑' : '↓' }} {{ Math.abs(reviewCompare.newMembers) }} 环比
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="4">
+          <div class="stat-card clickable" @click="openReviewDetail('renew')">
+            <div class="label">续费会员 <el-icon style="vertical-align: middle; font-size: 14px; margin-left: 4px"><ArrowRight /></el-icon></div>
+            <div class="value green">{{ reviewMetrics.renewMembers }}</div>
+            <div class="trend" :style="{ color: reviewCompare.renewMembers >= 0 ? '#67c23a' : '#f56c6c' }">
+              {{ reviewCompare.renewMembers >= 0 ? '↑' : '↓' }} {{ Math.abs(reviewCompare.renewMembers) }} 环比
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="4">
+          <div class="stat-card clickable" @click="openReviewDetail('churnRisk')">
+            <div class="label">流失风险 <el-icon style="vertical-align: middle; font-size: 14px; margin-left: 4px"><ArrowRight /></el-icon></div>
+            <div class="value red">{{ reviewMetrics.churnRiskMembers }}</div>
+            <div class="trend" :style="{ color: reviewCompare.churnRiskMembers <= 0 ? '#67c23a' : '#f56c6c' }">
+              {{ reviewCompare.churnRiskMembers <= 0 ? '↓' : '↑' }} {{ Math.abs(reviewCompare.churnRiskMembers) }} 环比
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="4">
+          <div class="stat-card clickable" @click="openReviewDetail('repurchase')">
+            <div class="label">套餐复购率 <el-icon style="vertical-align: middle; font-size: 14px; margin-left: 4px"><ArrowRight /></el-icon></div>
+            <div class="value orange">{{ reviewMetrics.repurchaseRate }}%</div>
+            <div class="trend" :style="{ color: reviewCompare.repurchaseRate >= 0 ? '#67c23a' : '#f56c6c' }">
+              {{ reviewCompare.repurchaseRate >= 0 ? '↑' : '↓' }} {{ Math.abs(reviewCompare.repurchaseRate) }}% 环比
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="4">
+          <div class="stat-card clickable" @click="openReviewDetail('coachOutput')">
+            <div class="label">教练产出 <el-icon style="vertical-align: middle; font-size: 14px; margin-left: 4px"><ArrowRight /></el-icon></div>
+            <div class="value">¥{{ reviewMetrics.coachOutput.toLocaleString() }}</div>
+            <div class="trend" :style="{ color: reviewCompare.coachOutput >= 0 ? '#67c23a' : '#f56c6c' }">
+              {{ reviewCompare.coachOutput >= 0 ? '↑' : '↓' }} ¥{{ Math.abs(reviewCompare.coachOutput).toLocaleString() }} 环比
+            </div>
+          </div>
+        </el-col>
+        <el-col :span="4">
+          <div class="stat-card clickable" @click="openReviewDetail('activeMember')">
+            <div class="label">活跃会员 <el-icon style="vertical-align: middle; font-size: 14px; margin-left: 4px"><ArrowRight /></el-icon></div>
+            <div class="value" style="color:#9b59b6">{{ reviewMetrics.activeMembers }}</div>
+            <div class="trend" :style="{ color: reviewCompare.activeMembers >= 0 ? '#67c23a' : '#f56c6c' }">
+              {{ reviewCompare.activeMembers >= 0 ? '↑' : '↓' }} {{ Math.abs(reviewCompare.activeMembers) }} 环比
+            </div>
+          </div>
+        </el-col>
+      </el-row>
+
+      <el-row :gutter="20" style="margin-bottom: 20px">
+        <el-col :span="12">
+          <div class="card-wrapper">
+            <h4 style="margin-bottom: 16px">会员趋势（近8周期）</h4>
+            <div ref="reviewMemberChartRef" style="width: 100%; height: 340px"></div>
+          </div>
+        </el-col>
+        <el-col :span="12">
+          <div class="card-wrapper">
+            <h4 style="margin-bottom: 16px">经营数据对比（近8周期）</h4>
+            <div ref="reviewFinanceChartRef" style="width: 100%; height: 340px"></div>
+          </div>
+        </el-col>
+      </el-row>
+
+      <el-row :gutter="20">
+        <el-col :span="12">
+          <div class="card-wrapper">
+            <h4 style="margin-bottom: 16px">教练产出排行</h4>
+            <el-table :data="reviewCoachRank" size="small" style="width: 100%">
+              <el-table-column type="index" label="#" width="50" align="center">
+                <template #default="{ $index }">
+                  <span :style="{ fontWeight: $index < 3 ? 'bold' : '', color: $index === 0 ? '#e6a23c' : $index === 1 ? '#909399' : $index === 2 ? '#c67a3b' : '' }">
+                    {{ $index + 1 }}
+                  </span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="coachName" label="教练" width="100" />
+              <el-table-column prop="totalHours" label="课时" width="80" align="center" />
+              <el-table-column prop="totalCount" label="人次" width="80" align="center" />
+              <el-table-column prop="totalCommission" label="产出(元)" width="120" align="right">
+                <template #default="{ row }">¥{{ row.totalCommission.toFixed(2) }}</template>
+              </el-table-column>
+              <el-table-column label="占比" width="180">
+                <template #default="{ row }">
+                  <el-progress :percentage="row.percent" :stroke-width="12" />
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </el-col>
+        <el-col :span="12">
+          <div class="card-wrapper">
+            <h4 style="margin-bottom: 16px">套餐类型销售占比</h4>
+            <div ref="reviewPackageTypeChartRef" style="width: 100%; height: 340px"></div>
+          </div>
+        </el-col>
+      </el-row>
+    </div>
+
     <div v-if="activeTab === 'daily'">
       <div class="daily-report">
         <div class="report-header">
@@ -323,8 +439,8 @@
         </el-col>
         <el-col :span="6">
           <div class="stat-card">
-            <div class="label">最畅销套餐销量</div>
-            <div class="value">{{ packageSalesStats.topPackage?.count || 0 }}份</div>
+            <div class="label">{{ packageSortBy === 'count' ? '最畅销套餐销量' : '最高销售额' }}</div>
+            <div class="value">{{ packageSortBy === 'count' ? (packageSalesStats.topPackage?.count || 0) + '份' : '¥' + (packageSalesStats.topPackage?.amount?.toFixed(2) || 0).toFixed(2) }}</div>
           </div>
         </el-col>
       </el-row>
@@ -338,7 +454,13 @@
         </el-col>
         <el-col :span="12">
           <div class="card-wrapper">
-            <h4 style="margin-bottom: 16px">套餐销售排行</h4>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px">
+              <h4 style="margin: 0">套餐销售排行</h4>
+              <el-radio-group v-model="packageSortBy" size="small" @change="onPackageSortChange">
+                <el-radio-button label="count">按销量</el-radio-button>
+                <el-radio-button label="amount">按销售额</el-radio-button>
+              </el-radio-group>
+            </div>
             <div ref="packageRankChartRef" style="width: 100%; height: 350px"></div>
           </div>
         </el-col>
@@ -548,6 +670,27 @@
         <el-button type="primary" @click="saveFollowRecord">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="reviewDetailVisible" :title="reviewDetailTitle" width="820px" top="8vh">
+      <div v-if="reviewDetailData">
+        <el-alert v-if="reviewSummary" :title="reviewSummary" type="info" show-icon :closable="false" style="margin-bottom: 16px" />
+        <el-table :data="reviewDetailRows" size="small" style="width: 100%" max-height="520">
+          <el-table-column v-for="col in reviewDetailCols" :key="col.prop" :label="col.label" :width="col.width" :align="col.align || 'left'">
+            <template v-if="col.template === 'money'" #default="{ row }">¥{{ (row[col.prop] || 0).toFixed(2) }}</template>
+            <template v-else-if="col.template === 'tag'" #default="{ row }">
+              <el-tag v-if="col.tagMap && col.tagMap[row[col.prop]]" :type="col.tagMap[row[col.prop]].type">{{ col.tagMap[row[col.prop]].label }}</el-tag>
+              <span v-else>{{ row[col.prop] }}</span>
+            </template>
+            <template v-else-if="col.template === 'date'" #default="{ row }">{{ row[col.prop] }}</template>
+            <template v-else #default="{ row }">{{ row[col.prop] }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button @click="exportReviewDetail">导出明细</el-button>
+        <el-button @click="reviewDetailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -561,6 +704,9 @@ import { useCheckinStore } from '@/stores/checkin'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 
+import { storage } from '@/utils/storage'
+import { persist } from '@/utils/persist'
+
 const memberStore = useMemberStore()
 const courseStore = useCourseStore()
 const consumptionStore = useConsumptionStore()
@@ -570,6 +716,31 @@ const statRange = ref('30')
 const activeReminderTab = ref('expire')
 const activeTab = ref('overview')
 const dailyDate = ref(dayjs().toDate())
+
+const reviewGranularity = ref('month')
+const reviewPeriod = ref()
+const reviewPeriodOptions = computed(() => {
+  const opts = []
+  if (reviewGranularity.value === 'month') {
+    for (let i = 0; i < 12; i++) {
+      const m = dayjs().subtract(i, 'month')
+      const label = m.format('YYYY年MM月')
+      opts.push({ label, value: m.format('YYYY-MM') })
+    }
+  } else {
+    for (let i = 0; i < 12; i++) {
+      const endOfWeek = dayjs().endOf('week').subtract(i, 'week')
+      const startOfWeek = endOfWeek.startOf('week')
+      const label = `${startOfWeek.format('MM.DD')}-${endOfWeek.format('MM.DD')}`
+      const value = startOfWeek.format('YYYY-MM-DD') + '/' + endOfWeek.format('YYYY-MM-DD')
+      opts.push({ label, value })
+    }
+  }
+  return opts
+})
+const reviewCoachRankCache = ref([])
+const reviewCoachPeriodCache = ref('')
+const packageSortBy = ref('count')
 
 const dailyDateStr = computed(() => dayjs(dailyDate.value).format('YYYY年MM月DD日'))
 
@@ -703,12 +874,28 @@ const packageSalesList = computed(() => {
 
 const packageSalesStats = computed(() => {
   const stats = memberStore.getPackageSalesStats()
+  const sortedPackages = stats.byPackage.slice().sort((a, b) => {
+    if (packageSortBy.value === 'amount') return b.amount - a.amount
+    return b.count - a.count
+  })
   return {
     totalCount: stats.totalCount,
     totalAmount: stats.totalAmount,
-    topPackage: stats.byPackage[0] || null
+    byType: stats.byType,
+    byPackage: sortedPackages,
+    topPackage: sortedPackages[0] || null
   }
 })
+
+function onPackageSortChange() {
+  nextTick(() => {
+    if (activeTab.value === 'packages') {
+      charts.forEach(c => c.dispose())
+      charts = []
+      initPackageCharts()
+    }
+  })
+}
 
 const operationsStats = computed(() => {
   const expiring = memberStore.getExpiringMembers().length
@@ -798,6 +985,298 @@ const saveFollowRecord = () => {
 const coachMonth = ref(dayjs().toDate())
 const coachSettlementData = ref([])
 
+function isInPeriod(dateStr, period, granularity) {
+  const d = dayjs(dateStr)
+  if (granularity === 'month') {
+    return d.format('YYYY-MM') === period
+  }
+  const [start, end] = period.split('/')
+  return d.isAfter(dayjs(start).subtract(1, 'day')) && d.isBefore(dayjs(end).add(1, 'day'))
+}
+
+function getPrevPeriod(period, granularity) {
+  if (granularity === 'month') {
+    return dayjs(period + '-01').subtract(1, 'month').format('YYYY-MM')
+  }
+  const [start] = period.split('/')
+  const s = dayjs(start).subtract(1, 'week')
+  const e = s.endOf('week')
+  return s.startOf('week').format('YYYY-MM-DD') + '/' + e.format('YYYY-MM-DD')
+}
+
+const reviewMetrics = computed(() => {
+  const period = reviewPeriod.value || reviewPeriodOptions.value[0]?.value
+  if (!period) return { newMembers: 0, renewMembers: 0, churnRiskMembers: 0, repurchaseRate: 0, coachOutput: 0, activeMembers: 0 }
+  const granularity = reviewGranularity.value
+  const newMembers = memberStore.members.filter(m => isInPeriod(m.joinDate, period, granularity)).length
+  const memberIdsInPeriod = new Set()
+  memberStore.packageSales.forEach(s => {
+    if (isInPeriod(s.date, period, granularity)) memberIdsInPeriod.add(s.memberId)
+  })
+  consumptionStore.transactions.forEach(t => {
+    if (t.type === 'recharge' && isInPeriod(t.date, period, granularity)) memberIdsInPeriod.add(t.memberId)
+  })
+  const renewed = memberStore.members.filter(m => {
+    const sales = memberStore.packageSales.filter(s => s.memberId === m.id && isInPeriod(s.date, period, granularity))
+    return sales.length > 0 && (memberStore.packageSales.filter(s => s.memberId === m.id).length > sales.length || dayjs(m.joinDate).isBefore(dayjs().subtract(30, 'day')))
+  }).length
+  const churnCutoff = granularity === 'month' ? dayjs().subtract(30, 'day') : dayjs().subtract(14, 'day')
+  const churnRiskMembers = memberStore.members.filter(m => {
+    const memberCheckins = checkinStore.checkins.filter(c => c.memberId === m.id)
+    if (memberCheckins.length === 0) return true
+    const last = memberCheckins.reduce((lat, c) => dayjs(c.checkTime).isAfter(dayjs(lat)) ? c.checkTime : lat, memberCheckins[0].checkTime)
+    return dayjs(last).isBefore(churnCutoff) && (m.remainingSessions < 5 || dayjs(m.expireDate).isBefore(dayjs().add(30, 'day')))
+  }).length
+  const allMembersWithPackage = memberStore.packageSales.map(s => s.memberId)
+  const uniqMembers = [...new Set(allMembersWithPackage)]
+  const repurchasers = uniqMembers.filter(mid => {
+    const sales = memberStore.packageSales.filter(s => s.memberId === mid)
+    return sales.length >= 2
+  })
+  const repurchaseRate = uniqMembers.length > 0 ? Math.round(repurchasers.length / uniqMembers.length * 100) : 0
+  const activeSet = new Set()
+  checkinStore.checkins.forEach(c => { if (isInPeriod(c.checkTime, period, granularity)) activeSet.add(c.memberId) })
+  courseStore.enrollments.forEach(e => { if (isInPeriod(e.enrollDate, period, granularity)) activeSet.add(e.memberId) })
+  const activeMembers = activeSet.size
+  return { newMembers, renewMembers: renewed, churnRiskMembers, repurchaseRate, coachOutput: reviewCoachRankSync.value.reduce((s, r) => s + r.totalCommission, 0), activeMembers }
+})
+
+const reviewCompare = computed(() => {
+  const period = reviewPeriod.value || reviewPeriodOptions.value[0]?.value
+  const granularity = reviewGranularity.value
+  if (!period) return { newMembers: 0, renewMembers: 0, churnRiskMembers: 0, repurchaseRate: 0, coachOutput: 0, activeMembers: 0 }
+  const cur = reviewMetrics.value
+  const prevPeriod = getPrevPeriod(period, granularity)
+  const saveCur = reviewPeriod.value
+  reviewPeriod.value = prevPeriod
+  const prev = { ...reviewMetrics.value }
+  reviewPeriod.value = saveCur
+  return {
+    newMembers: cur.newMembers - prev.newMembers,
+    renewMembers: cur.renewMembers - prev.renewMembers,
+    churnRiskMembers: cur.churnRiskMembers - prev.churnRiskMembers,
+    repurchaseRate: cur.repurchaseRate - prev.repurchaseRate,
+    coachOutput: 0,
+    activeMembers: cur.activeMembers - prev.activeMembers
+  }
+})
+
+const reviewDetailVisible = ref(false)
+const reviewDetailTitle = ref('')
+const reviewSummary = ref('')
+const reviewDetailRows = ref([])
+const reviewDetailCols = ref([])
+const reviewDetailData = ref(null)
+
+function openReviewDetail(type) {
+  const period = reviewPeriod.value || reviewPeriodOptions.value[0]?.value
+  const granularity = reviewGranularity.value
+  reviewDetailData.value = { type, period, granularity }
+
+  const titleMap = {
+    newMember: '新增会员明细',
+    renew: '续费会员明细',
+    churnRisk: '流失风险会员明细',
+    repurchase: '套餐复购明细',
+    coachOutput: '教练产出明细',
+    activeMember: '活跃会员明细'
+  }
+  reviewDetailTitle.value = titleMap[type] || '经营明细'
+
+  if (type === 'newMember') {
+    const list = memberStore.members.filter(m => isInPeriod(m.joinDate, period, granularity))
+    reviewSummary.value = `本${granularity === 'month' ? '月' : '周'}共新增会员 ${list.length} 人`
+    reviewDetailCols.value = [
+      { prop: 'id', label: '会员ID', width: 140 },
+      { prop: 'name', label: '姓名', width: 100 },
+      { prop: 'phone', label: '电话', width: 130 },
+      { prop: 'levelLabel', label: '等级', width: 100, template: 'tag', tagMap: { '普通会员': { label: '普通会员', type: 'info' }, '银卡会员': { label: '银卡会员', type: '' }, '金卡会员': { label: '金卡会员', type: 'warning' }, '钻石会员': { label: '钻石会员', type: 'primary' } } },
+      { prop: 'joinDate', label: '入会日期', width: 120 },
+      { prop: 'expireDate', label: '到期日', width: 120 }
+    ]
+    reviewDetailRows.value = list.map(m => ({ ...m, levelLabel: memberStore.getLevelLabel(m.level) }))
+  } else if (type === 'renew') {
+    const rows = []
+    const memberIds = new Set()
+    memberStore.packageSales
+      .filter(s => isInPeriod(s.date, period, granularity))
+      .forEach(s => {
+        const totalPkg = memberStore.packageSales.filter(x => x.memberId === s.memberId).length
+        if (totalPkg >= 2) {
+          memberIds.add(s.memberId)
+          rows.push({
+            memberId: s.memberId,
+            memberName: s.memberName,
+            packageName: s.packageName,
+            amount: s.amount,
+            paymentMethodLabel: consumptionStore.getMethodLabel(s.paymentMethod),
+            date: s.date
+          })
+        }
+      })
+    reviewSummary.value = `本${granularity === 'month' ? '月' : '周'}共 ${memberIds.size} 位会员续费，共 ${rows.length} 笔`
+    reviewDetailCols.value = [
+      { prop: 'memberId', label: '会员ID', width: 140 },
+      { prop: 'memberName', label: '姓名', width: 100 },
+      { prop: 'packageName', label: '套餐名称', minWidth: 150 },
+      { prop: 'amount', label: '金额', width: 100, align: 'right', template: 'money' },
+      { prop: 'paymentMethodLabel', label: '支付方式', width: 100 },
+      { prop: 'date', label: '购买时间', width: 160 }
+    ]
+    reviewDetailRows.value = rows
+  } else if (type === 'churnRisk') {
+    const list = memberStore.members.filter(m => {
+      const memberCheckins = checkinStore.checkins.filter(c => c.memberId === m.id)
+      let lastCheckin = null, absentDays = 9999
+      if (memberCheckins.length > 0) {
+        lastCheckin = memberCheckins.reduce((lat, c) => dayjs(c.checkTime).isAfter(dayjs(lat)) ? c.checkTime : lat, memberCheckins[0].checkTime)
+        absentDays = dayjs().diff(dayjs(lastCheckin), 'day')
+      }
+      const cutoffDays = granularity === 'month' ? 30 : 14
+      return (absentDays >= cutoffDays) && (m.remainingSessions < 5 || dayjs(m.expireDate).isBefore(dayjs().add(30, 'day')))
+    }).map(m => {
+      const memberCheckins = checkinStore.checkins.filter(c => c.memberId === m.id)
+      let lastCheckin = null
+      if (memberCheckins.length > 0) {
+        lastCheckin = memberCheckins.reduce((lat, c) => dayjs(c.checkTime).isAfter(dayjs(lat)) ? c.checkTime : lat, memberCheckins[0].checkTime)
+      }
+      const absentDays = lastCheckin ? dayjs().diff(dayjs(lastCheckin), 'day') : '从未到店'
+      return { ...m, lastCheckin, absentDays }
+    })
+    reviewSummary.value = `共 ${list.length} 位会员存在流失风险`
+    reviewDetailCols.value = [
+      { prop: 'id', label: '会员ID', width: 140 },
+      { prop: 'name', label: '姓名', width: 100 },
+      { prop: 'phone', label: '电话', width: 130 },
+      { prop: 'remainingSessions', label: '剩余次数', width: 90, align: 'center' },
+      { prop: 'expireDate', label: '到期日', width: 120 },
+      { prop: 'absentDays', label: '未到店(天)', width: 100, align: 'center' },
+      { prop: 'lastCheckin', label: '最后签到', width: 160 }
+    ]
+    reviewDetailRows.value = list
+  } else if (type === 'repurchase') {
+    const rows = []
+    const uniqMembers = [...new Set(memberStore.packageSales.map(s => s.memberId))]
+    uniqMembers.forEach(mid => {
+      const sales = memberStore.packageSales.filter(s => s.memberId === mid).sort((a, b) => a.date.localeCompare(b.date))
+      if (sales.length >= 2) {
+        const member = memberStore.getMemberById(mid)
+        sales.forEach((s, idx) => {
+          rows.push({
+            memberId: mid,
+            memberName: member?.name || s.memberName,
+            purchaseNo: `第${idx + 1}次`,
+            packageName: s.packageName,
+            amount: s.amount,
+            date: s.date
+          })
+        })
+      }
+    })
+    const repurchaserCount = [...new Set(rows.map(r => r.memberId))].length
+    reviewSummary.value = `共 ${repurchaserCount} 位复购会员，累计复购 ${rows.length} 次`
+    reviewDetailCols.value = [
+      { prop: 'memberId', label: '会员ID', width: 140 },
+      { prop: 'memberName', label: '姓名', width: 100 },
+      { prop: 'purchaseNo', label: '购买次数', width: 90, align: 'center' },
+      { prop: 'packageName', label: '套餐名称', minWidth: 150 },
+      { prop: 'amount', label: '金额', width: 100, align: 'right', template: 'money' },
+      { prop: 'date', label: '购买时间', width: 160 }
+    ]
+    reviewDetailRows.value = rows
+  } else if (type === 'coachOutput') {
+    const rank = reviewCoachRankCache.value.length > 0 ? reviewCoachRankCache.value : []
+    const month = granularity === 'month' ? period : dayjs().format('YYYY-MM')
+    courseStore.getCoachSettlement(month).then(data => {
+      const rows = data.map(r => ({
+        coachName: r.coachName,
+        groupHours: r.groupHours,
+        groupCount: r.groupCount,
+        groupCommission: r.groupCommission,
+        privateHours: r.privateHours,
+        privateCount: r.privateCount,
+        privateCommission: r.privateCommission,
+        activityHours: r.activityHours,
+        activityCount: r.activityCount,
+        activityCommission: r.activityCommission,
+        totalHours: r.totalHours,
+        totalCommission: r.totalCommission
+      }))
+      reviewSummary.value = `教练总产出 ¥${rows.reduce((s, r) => s + r.totalCommission, 0).toFixed(2)}`
+      reviewDetailRows.value = rows
+    })
+    reviewDetailCols.value = [
+      { prop: 'coachName', label: '教练', width: 90 },
+      { prop: 'groupHours', label: '团课课时', width: 90, align: 'center' },
+      { prop: 'groupCount', label: '团课人次', width: 90, align: 'center' },
+      { prop: 'groupCommission', label: '团课提成', width: 100, align: 'right', template: 'money' },
+      { prop: 'privateHours', label: '私教课时', width: 90, align: 'center' },
+      { prop: 'privateCount', label: '私教人次', width: 90, align: 'center' },
+      { prop: 'privateCommission', label: '私教提成', width: 100, align: 'right', template: 'money' },
+      { prop: 'totalHours', label: '总课时', width: 90, align: 'center' },
+      { prop: 'totalCommission', label: '总提成', width: 110, align: 'right', template: 'money' }
+    ]
+    reviewDetailRows.value = []
+  } else if (type === 'activeMember') {
+    const activeMap = new Map()
+    checkinStore.checkins
+      .filter(c => isInPeriod(c.checkTime, period, granularity))
+      .forEach(c => {
+        if (!activeMap.has(c.memberId)) activeMap.set(c.memberId, { checkins: 0, enrolls: 0 })
+        activeMap.get(c.memberId).checkins += 1
+      })
+    courseStore.enrollments
+      .filter(e => isInPeriod(e.enrollDate, period, granularity))
+      .forEach(e => {
+        if (!activeMap.has(e.memberId)) activeMap.set(e.memberId, { checkins: 0, enrolls: 0 })
+        activeMap.get(e.memberId).enrolls += 1
+      })
+    const rows = [...activeMap.entries()].map(([mid, stats]) => {
+      const m = memberStore.getMemberById(mid)
+      return {
+        id: mid,
+        name: m?.name || '未知',
+        phone: m?.phone || '-',
+        levelLabel: m ? memberStore.getLevelLabel(m.level) : '-',
+        checkins: stats.checkins,
+        enrolls: stats.enrolls
+      }
+    })
+    reviewSummary.value = `本${granularity === 'month' ? '月' : '周'}活跃会员共 ${rows.length} 人`
+    reviewDetailCols.value = [
+      { prop: 'id', label: '会员ID', width: 140 },
+      { prop: 'name', label: '姓名', width: 100 },
+      { prop: 'phone', label: '电话', width: 130 },
+      { prop: 'levelLabel', label: '等级', width: 100 },
+      { prop: 'checkins', label: '签到次数', width: 90, align: 'center' },
+      { prop: 'enrolls', label: '报名次数', width: 90, align: 'center' }
+    ]
+    reviewDetailRows.value = rows
+  }
+  reviewDetailVisible.value = true
+}
+
+function exportReviewDetail() {
+  if (reviewDetailRows.value.length === 0) { ElMessage.warning('暂无可导出数据'); return }
+  const header = reviewDetailCols.value.map(c => c.label).join(',') + '\n'
+  const rows = reviewDetailRows.value.map(row =>
+    reviewDetailCols.value.map(col => {
+      let v = row[col.prop]
+      if (col.template === 'money') v = (Number(v) || 0).toFixed(2)
+      if (typeof v === 'string' && v.includes(',')) v = `"${v}"`
+      return v ?? ''
+    }).join(',')
+  ).join('\n')
+  const blob = new Blob(['\uFEFF' + header + rows], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${reviewDetailTitle.value}_${dayjs().format('YYYYMMDDHHmm')}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  ElMessage.success('CSV已导出')
+}
+
 const loadCoachSettlement = async () => {
   const month = dayjs(coachMonth.value).format('YYYY-MM')
   coachSettlementData.value = await courseStore.getCoachSettlement(month)
@@ -864,9 +1343,12 @@ const importBackup = (event) => {
       const data = JSON.parse(e.target.result)
       ElMessageBox.confirm('导入将覆盖当前所有数据，是否继续？', '警告', { type: 'warning' })
         .then(() => {
+          storage.clearData()
+          localStorage.clear()
           Object.keys(data).forEach(key => {
-            localStorage.setItem(key, data[key])
+            localStorage.setItem(key, typeof data[key] === 'string' ? data[key] : JSON.stringify(data[key]))
           })
+          persist()
           ElMessage.success('数据已恢复，请刷新页面')
           setTimeout(() => location.reload(), 1000)
         })
@@ -896,6 +1378,15 @@ const fillRateChartRef = ref(null)
 const incomePieChartRef = ref(null)
 const packageTypeChartRef = ref(null)
 const packageRankChartRef = ref(null)
+const reviewMemberChartRef = ref(null)
+const reviewFinanceChartRef = ref(null)
+const reviewPackageTypeChartRef = ref(null)
+
+watch(reviewGranularity, () => {
+  nextTick(() => {
+    if (reviewPeriodOptions.value.length > 0) reviewPeriod.value = reviewPeriodOptions.value[0].value
+  })
+}, { immediate: true })
 
 let charts = []
 
@@ -1039,15 +1530,19 @@ function initPackageCharts() {
   if (packageRankChartRef.value) {
     const chart = echarts.init(packageRankChartRef.value)
     const stats = memberStore.getPackageSalesStats()
-    const data = stats.byPackage.slice(0, 8)
+    const useAmount = packageSortBy.value === 'amount'
+    let data = stats.byPackage.slice().sort((a, b) => useAmount ? b.amount - a.amount : b.count - a.count).slice(0, 8)
     chart.setOption({
-      tooltip: { trigger: 'axis', formatter: '{b}: {c}份' },
+      tooltip: { trigger: 'axis', formatter: (params) => {
+        const p = params[0]
+        return `${p.name}: ${useAmount ? '¥' + p.value : p.value + '份'}`
+      } },
       grid: { left: 140, right: 30, top: 20, bottom: 30 },
-      xAxis: { type: 'value', minInterval: 1 },
+      xAxis: { type: 'value', minInterval: 1, axisLabel: useAmount ? { formatter: '¥{value}' } : {} },
       yAxis: { type: 'category', data: data.map(d => d.name) },
       series: [{
         type: 'bar',
-        data: data.map(d => d.count),
+        data: data.map(d => useAmount ? d.amount : d.count),
         itemStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
             { offset: 0, color: '#67c23a' },
@@ -1055,7 +1550,98 @@ function initPackageCharts() {
           ]),
           borderRadius: [0, 4, 4, 0]
         },
-        label: { show: true, position: 'right', formatter: '{c}份' }
+        label: { show: true, position: 'right', formatter: useAmount ? '¥{c}' : '{c}份' }
+      }]
+    })
+    charts.push(chart)
+  }
+}
+
+function initReviewCharts() {
+  const granularity = reviewGranularity.value
+  const periodCount = 8
+  const labels = []
+  const newMembers = []
+  const renewMembers = []
+  const activeMembers = []
+  const recharges = []
+  const packageSales = []
+
+  for (let i = periodCount - 1; i >= 0; i--) {
+    let period, label
+    if (granularity === 'month') {
+      const m = dayjs().subtract(i, 'month')
+      period = m.format('YYYY-MM')
+      label = m.format('MM月')
+    } else {
+      const sow = dayjs().endOf('week').subtract(i, 'week').startOf('week')
+      const eow = sow.endOf('week')
+      period = sow.format('YYYY-MM-DD') + '/' + eow.format('YYYY-MM-DD')
+      label = sow.format('MM/DD')
+    }
+    labels.push(label)
+    newMembers.push(memberStore.members.filter(m => isInPeriod(m.joinDate, period, granularity)).length)
+    const renewed = memberStore.packageSales.filter(s => isInPeriod(s.date, period, granularity)).length
+    renewMembers.push(renewed)
+    const act = new Set()
+    checkinStore.checkins.forEach(c => { if (isInPeriod(c.checkTime, period, granularity)) act.add(c.memberId) })
+    courseStore.enrollments.forEach(e => { if (isInPeriod(e.enrollDate, period, granularity)) act.add(e.memberId) })
+    activeMembers.push(act.size)
+    const r = consumptionStore.transactions.filter(t => t.type === 'recharge' && isInPeriod(t.date, period, granularity)).reduce((s, t) => s + t.amount, 0)
+    recharges.push(Math.round(r * 100) / 100)
+    const ps = memberStore.packageSales.filter(s => isInPeriod(s.date, period, granularity)).reduce((s, t) => s + t.amount, 0)
+    packageSales.push(Math.round(ps * 100) / 100)
+  }
+
+  if (reviewMemberChartRef.value) {
+    const chart = echarts.init(reviewMemberChartRef.value)
+    chart.setOption({
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['新增会员', '续费次数', '活跃会员'], top: 0 },
+      grid: { left: 40, right: 20, top: 40, bottom: 30 },
+      xAxis: { type: 'category', data: labels },
+      yAxis: { type: 'value', minInterval: 1 },
+      series: [
+        { name: '新增会员', type: 'line', smooth: true, data: newMembers, itemStyle: { color: '#409eff' }, lineStyle: { width: 3 } },
+        { name: '续费次数', type: 'bar', stack: 'op', data: renewMembers, itemStyle: { color: '#67c23a' }, barWidth: 14 },
+        { name: '活跃会员', type: 'bar', stack: 'op', data: activeMembers, itemStyle: { color: '#e6a23c' }, barWidth: 14 }
+      ]
+    })
+    charts.push(chart)
+  }
+
+  if (reviewFinanceChartRef.value) {
+    const chart = echarts.init(reviewFinanceChartRef.value)
+    chart.setOption({
+      tooltip: { trigger: 'axis', formatter: (params) => params.map(p => `${p.seriesName}: ¥${p.value}`).join('<br/>') },
+      legend: { data: ['充值收入', '套餐销售'], top: 0 },
+      grid: { left: 50, right: 20, top: 40, bottom: 30 },
+      xAxis: { type: 'category', data: labels },
+      yAxis: { type: 'value', axisLabel: { formatter: '¥{value}' } },
+      series: [
+        { name: '充值收入', type: 'bar', stack: 'total', data: recharges, itemStyle: { color: '#67c23a' }, barWidth: 18 },
+        { name: '套餐销售', type: 'bar', stack: 'total', data: packageSales, itemStyle: { color: '#409eff' }, barWidth: 18 }
+      ]
+    })
+    charts.push(chart)
+  }
+
+  if (reviewPackageTypeChartRef.value) {
+    const chart = echarts.init(reviewPackageTypeChartRef.value)
+    const stats = memberStore.getPackageSalesStats()
+    const data = stats.byType.map(t => ({ name: t.typeLabel, value: t.amount }))
+    chart.setOption({
+      tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
+      legend: { orient: 'vertical', left: 'left', top: 'center' },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '65%'],
+        center: ['65%', '50%'],
+        avoidLabelOverlap: false,
+        itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
+        label: { show: true, formatter: '{b}\n¥{c}' },
+        data,
+        color: ['#409eff', '#67c23a', '#e6a23c', '#f56c6c']
       }]
     })
     charts.push(chart)
@@ -1142,6 +1728,9 @@ watch(activeTab, (newTab) => {
     charts = []
     if (newTab === 'overview') {
       initCharts()
+    } else if (newTab === 'review') {
+      loadCoachRankForReview()
+      setTimeout(() => initReviewCharts(), 60)
     } else if (newTab === 'packages') {
       initPackageCharts()
     } else if (newTab === 'operations') {
@@ -1151,6 +1740,35 @@ watch(activeTab, (newTab) => {
     }
   })
 })
+
+watch([reviewGranularity, reviewPeriod], () => {
+  if (activeTab.value !== 'review') return
+  reviewCoachPeriodCache.value = ''
+  nextTick(() => {
+    charts.forEach(c => c.dispose())
+    charts = []
+    loadCoachRankForReview()
+    setTimeout(() => initReviewCharts(), 60)
+  })
+})
+
+const reviewCoachRankSync = ref([])
+async function loadCoachRankForReview() {
+  const period = reviewPeriod.value || reviewPeriodOptions.value[0]?.value
+  if (!period) return
+  const granularity = reviewGranularity.value
+  const month = granularity === 'month' ? period : dayjs().format('YYYY-MM')
+  const data = await courseStore.getCoachSettlement(month)
+  const total = data.reduce((s, r) => s + r.totalCommission, 0)
+  const ranked = data
+    .map(r => ({ ...r, percent: total > 0 ? Math.round(r.totalCommission / total * 100) : 0, totalCount: r.groupCount + r.privateCount + r.activityCount }))
+    .sort((a, b) => b.totalCommission - a.totalCommission)
+  reviewCoachRankSync.value = ranked
+  reviewCoachRankCache.value = ranked
+  reviewCoachPeriodCache.value = period
+}
+watch(reviewCoachRankSync, () => {}, { immediate: true })
+const reviewCoachRank = computed(() => reviewCoachRankSync.value)
 
 watch(dailyDate, () => {})
 
@@ -1218,5 +1836,20 @@ onBeforeUnmount(() => {
   .el-table th, .el-table td {
     padding: 4px 8px !important;
   }
+}
+
+.stat-card.clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.stat-card.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
+  border-color: #409eff;
+}
+.stat-card .trend {
+  font-size: 12px;
+  margin-top: 6px;
+  font-weight: 500;
 }
 </style>

@@ -10,40 +10,32 @@ let persistTimer = null
 export function initStores() {
   if (inited) return
   const data = storage.loadData()
-  
+
   const memberStore = useMemberStore()
   const courseStore = useCourseStore()
   const checkinStore = useCheckinStore()
   const consumptionStore = useConsumptionStore()
 
   if (data) {
-    if (data.members && data.members.length > 0) {
-      memberStore.$patch({ members: data.members })
-    }
-    if (data.packageSales && data.packageSales.length > 0) {
-      memberStore.$patch({ packageSales: data.packageSales })
-    }
-    if (data.followRecords && data.followRecords.length > 0) {
-      memberStore.$patch({ followRecords: data.followRecords })
-    }
-    if (data.courses && data.courses.length > 0) {
-      courseStore.$patch({ courses: data.courses })
-    }
-    if (data.enrollments && data.enrollments.length > 0) {
-      courseStore.$patch({ enrollments: data.enrollments })
-    }
-    if (data.waitlists && data.waitlists.length > 0) {
-      courseStore.$patch({ waitlists: data.waitlists })
-    }
-    if (data.transfers && data.transfers.length > 0) {
-      courseStore.$patch({ transfers: data.transfers })
-    }
-    if (data.checkins && data.checkins.length > 0) {
-      checkinStore.$patch({ checkins: data.checkins })
-    }
-    if (data.transactions && data.transactions.length > 0) {
-      consumptionStore.$patch({ transactions: data.transactions })
-    }
+    const STORAGE_KEY = 'sports_club_data_v1'
+    const restoredKeys = Object.keys(data).filter(k => Array.isArray(data[k]) && data[k].length === 0)
+    memberStore.$patch({
+      members: Array.isArray(data.members) ? data.members : [],
+      packageSales: Array.isArray(data.packageSales) ? data.packageSales : [],
+      followRecords: Array.isArray(data.followRecords) ? data.followRecords : []
+    })
+    courseStore.$patch({
+      courses: Array.isArray(data.courses) ? data.courses : [],
+      enrollments: Array.isArray(data.enrollments) ? data.enrollments : [],
+      waitlists: Array.isArray(data.waitlists) ? data.waitlists : [],
+      transfers: Array.isArray(data.transfers) ? data.transfers : []
+    })
+    checkinStore.$patch({
+      checkins: Array.isArray(data.checkins) ? data.checkins : []
+    })
+    consumptionStore.$patch({
+      transactions: Array.isArray(data.transactions) ? data.transactions : []
+    })
   }
 
   inited = true

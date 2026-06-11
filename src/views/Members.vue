@@ -50,9 +50,10 @@
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="150" show-overflow-tooltip />
-        <el-table-column label="操作" width="260" fixed="right" class="no-print">
+        <el-table-column label="操作" width="340" fixed="right" class="no-print">
           <template #default="{ row }">
             <div class="table-actions">
+              <el-button size="small" type="primary" @click="openDetailDialog(row)">详情</el-button>
               <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
               <el-button size="small" type="success" @click="openRechargeDialog(row)">充值</el-button>
               <el-button size="small" type="danger" @click="deleteMember(row)">删除</el-button>
@@ -159,6 +160,106 @@
         <el-button type="primary" :disabled="!canConfirmRecharge" @click="confirmRecharge">确认充值</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="detailDialogVisible" title="会员详情" width="920px" top="5vh">
+      <div v-if="detailMember">
+        <div class="detail-header">
+          <div class="detail-avatar" :style="{ background: memberStore.getLevelColor(detailMember.level) }">
+            {{ detailMember.name.charAt(0) }}
+          </div>
+          <div class="detail-basic">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px">
+              <span class="detail-name">{{ detailMember.name }}</span>
+              <el-tag :color="memberStore.getLevelColor(detailMember.level)" effect="dark" style="color:#fff; font-size: 12px">
+                {{ memberStore.getLevelLabel(detailMember.level) }}
+              </el-tag>
+            </div>
+            <div class="detail-meta">
+              <span>ID：{{ detailMember.id }}</span>
+              <span>电话：{{ detailMember.phone }}</span>
+              <span>入会：{{ detailMember.joinDate }}</span>
+              <span :style="{ color: isExpiring(detailMember) ? '#f56c6c' : '' }">到期：{{ detailMember.expireDate }}</span>
+            </div>
+          </div>
+          <div class="detail-stats">
+            <div class="detail-stat-item">
+              <div class="ds-value blue">¥{{ detailMember.balance.toFixed(2) }}</div>
+              <div class="ds-label">当前余额</div>
+            </div>
+            <div class="detail-stat-item">
+              <div class="ds-value green">{{ detailMember.remainingSessions }}/{{ detailMember.totalSessions }}</div>
+              <div class="ds-label">剩余次数/总次数</div>
+            </div>
+          </div>
+        </div>
+
+        <el-row :gutter="12" style="margin: 20px 0">
+          <el-col :span="6">
+            <div class="detail-mini-card">
+              <div class="dmc-num blue">{{ memberTimelineStats.packageCount }}</div>
+              <div class="dmc-label">购买套餐</div>
+            </div>
+          </el-col>
+          <el-col :span="6">
+            <div class="detail-mini-card">
+              <div class="dmc-num green">¥{{ memberTimelineStats.rechargeTotal.toFixed(2) }}</div>
+              <div class="dmc-label">累计充值</div>
+            </div>
+          </el-col>
+          <el-col :span="6">
+            <div class="detail-mini-card">
+              <div class="dmc-num orange">{{ memberTimelineStats.checkinCount }}</div>
+              <div class="dmc-label">签到次数</div>
+            </div>
+          </el-col>
+          <el-col :span="6">
+            <div class="detail-mini-card">
+              <div class="dmc-num">{{ memberTimelineStats.enrollCount }}</div>
+              <div class="dmc-label">报名课程</div>
+            </div>
+          </el-col>
+        </el-row>
+
+        <div class="timeline-filter">
+          <el-radio-group v-model="timelineFilter" size="default">
+            <el-radio-button value="all">全部</el-radio-button>
+            <el-radio-button value="package">套餐购买</el-radio-button>
+            <el-radio-button value="txn">充值/退款/消费</el-radio-button>
+            <el-radio-button value="checkin">签到扣次</el-radio-button>
+            <el-radio-button value="course">报名转课</el-radio-button>
+            <el-radio-button value="follow">跟进记录</el-radio-button>
+          </el-radio-group>
+        </div>
+
+        <div class="timeline-wrapper">
+          <el-timeline style="padding: 8px 20px">
+            <el-timeline-item
+              v-for="(item, idx) in filteredTimeline"
+              :key="idx"
+              :timestamp="item.time"
+              :type="item.dotType"
+              :color="item.dotColor"
+              size="large"
+              hollow
+            >
+              <div class="tl-card">
+                <div class="tl-header">
+                  <el-tag :type="item.tagType" size="small" effect="light">{{ item.category }}</el-tag>
+                  <span class="tl-title">{{ item.title }}</span>
+                </div>
+                <div class="tl-body">{{ item.description }}</div>
+                <div v-if="item.meta" class="tl-meta">{{ item.meta }}</div>
+              </div>
+            </el-timeline-item>
+            <div v-if="filteredTimeline.length === 0" style="text-align: center; padding: 40px; color: #909399">暂无相关记录</div>
+          </el-timeline>
+        </div>
+      </div>
+      <template #footer>
+        <el-button type="primary" @click="openRechargeDialog(detailMember)">充值/购套餐</el-button>
+        <el-button @click="detailDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -166,11 +267,15 @@
 import { ref, computed, reactive } from 'vue'
 import { useMemberStore } from '@/stores/member'
 import { useConsumptionStore } from '@/stores/consumption'
+import { useCourseStore } from '@/stores/course'
+import { useCheckinStore } from '@/stores/checkin'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import dayjs from 'dayjs'
 
 const memberStore = useMemberStore()
 const consumptionStore = useConsumptionStore()
+const courseStore = useCourseStore()
+const checkinStore = useCheckinStore()
 
 const searchKeyword = ref('')
 const filterLevel = ref('')
@@ -356,4 +461,285 @@ function confirmRecharge() {
     rechargeDialogVisible.value = false
   }
 }
+
+const detailDialogVisible = ref(false)
+const detailMember = ref(null)
+const timelineFilter = ref('all')
+
+function openDetailDialog(row) {
+  detailMember.value = row
+  timelineFilter.value = 'all'
+  detailDialogVisible.value = true
+}
+
+const memberTimelineStats = computed(() => {
+  const id = detailMember.value?.id
+  if (!id) return { packageCount: 0, rechargeTotal: 0, checkinCount: 0, enrollCount: 0 }
+  const packages = memberStore.packageSales.filter(s => s.memberId === id)
+  const txns = consumptionStore.transactions.filter(t => t.memberId === id)
+  const checkins = checkinStore.checkins.filter(c => c.memberId === id && (c.status === 'checked' || c.status === 'makeup'))
+  const enrolls = courseStore.enrollments.filter(e => e.memberId === id)
+  const rechargeTotal = txns.filter(t => t.type === 'recharge').reduce((s, t) => s + t.amount, 0)
+  return {
+    packageCount: packages.length,
+    rechargeTotal,
+    checkinCount: checkins.length,
+    enrollCount: enrolls.length
+  }
+})
+
+const memberTimeline = computed(() => {
+  const id = detailMember.value?.id
+  if (!id) return []
+  const events = []
+
+  memberStore.packageSales
+    .filter(s => s.memberId === id)
+    .forEach(s => {
+      events.push({
+        time: s.date,
+        sortTime: dayjs(s.date).valueOf(),
+        category: '套餐购买',
+        title: `购买「${s.packageName}」`,
+        description: memberStore.getPackageTypeLabel(s.packageType),
+        meta: `金额 ¥${s.amount.toFixed(2)} · 支付方式：${consumptionStore.getMethodLabel(s.paymentMethod)}`,
+        tagType: 'success',
+        dotType: 'success',
+        dotColor: '#67c23a',
+        filterType: 'package'
+      })
+    })
+
+  consumptionStore.transactions
+    .filter(t => t.memberId === id)
+    .forEach(t => {
+      const typeLabel = consumptionStore.getTypeLabel(t.type)
+      const colorMap = { recharge: 'success', deduct: 'primary', refund: 'warning', consume: 'danger' }
+      const tagMap = { recharge: 'success', deduct: 'primary', refund: 'warning', consume: 'danger' }
+      const amountStr = t.amount > 0 ? `金额 ¥${t.amount.toFixed(2)}` : ''
+      const sessionStr = t.sessions > 0 ? ` · ${t.sessions}次` : ''
+      events.push({
+        time: t.date,
+        sortTime: dayjs(t.date).valueOf(),
+        category: typeLabel,
+        title: `${typeLabel}${t.packageName ? `（${t.packageName}）` : ''}`,
+        description: t.remark || '-',
+        meta: `${amountStr}${sessionStr} · 方式：${consumptionStore.getMethodLabel(t.method)}`,
+        tagType: tagMap[t.type] || 'info',
+        dotType: colorMap[t.type] || 'info',
+        dotColor: consumptionStore.getTypeColor(t.type) || '#909399',
+        filterType: 'txn'
+      })
+    })
+
+  checkinStore.checkins
+    .filter(c => c.memberId === id)
+    .forEach(c => {
+      const course = courseStore.courses.find(k => k.id === c.courseId)
+      const statusLabel = checkinStore.getStatusLabel(c.status)
+      const ok = c.status === 'checked' || c.status === 'makeup'
+      events.push({
+        time: c.checkTime,
+        sortTime: dayjs(c.checkTime).valueOf(),
+        category: '签到',
+        title: `${course?.name || '未知课程'} · ${statusLabel}`,
+        description: course ? `${course.date} ${course.startTime}-${course.endTime} · ${course.venue}` : '',
+        meta: c.operator ? `操作人：${c.operator}` : '',
+        tagType: ok ? 'primary' : 'warning',
+        dotType: ok ? 'primary' : 'warning',
+        dotColor: ok ? '#409eff' : '#e6a23c',
+        filterType: 'checkin'
+      })
+    })
+
+  courseStore.enrollments
+    .filter(e => e.memberId === id)
+    .forEach(e => {
+      const course = courseStore.courses.find(k => k.id === e.courseId)
+      if (e.transferred) {
+        events.push({
+          time: e.enrollDate,
+          sortTime: dayjs(e.enrollDate).valueOf(),
+          category: '转课',
+          title: `从「${e.fromCourseName || '原课程'}」转入「${course?.name || '目标课程'}」`,
+          description: course ? `${course.date} ${course.startTime}-${course.endTime}` : '',
+          meta: '转课成功',
+          tagType: 'warning',
+          dotType: 'warning',
+          dotColor: '#e6a23c',
+          filterType: 'course'
+        })
+      } else {
+        events.push({
+          time: e.enrollDate,
+          sortTime: dayjs(e.enrollDate).valueOf(),
+          category: '报名',
+          title: e.fromWaitlist ? `候补转正：「${course?.name || '课程'}」` : `报名「${course?.name || '课程'}」`,
+          description: course ? `${course.date} ${course.startTime}-${course.endTime} · 教练：${courseStore.getCoachName(course.coachId)}` : '',
+          meta: '',
+          tagType: 'primary',
+          dotType: 'primary',
+          dotColor: '#409eff',
+          filterType: 'course'
+        })
+      }
+    })
+
+  memberStore.getFollowRecordsByMember(id).forEach(r => {
+    events.push({
+      time: r.date,
+      sortTime: dayjs(r.date).valueOf(),
+      category: '跟进记录',
+      title: `${r.type}`,
+      description: r.content,
+      meta: '',
+      tagType: 'info',
+      dotType: 'info',
+      dotColor: '#909399',
+      filterType: 'follow'
+    })
+  })
+
+  return events.sort((a, b) => b.sortTime - a.sortTime)
+})
+
+const filteredTimeline = computed(() => {
+  if (timelineFilter.value === 'all') return memberTimeline.value
+  return memberTimeline.value.filter(e => e.filterType === timelineFilter.value)
+})
 </script>
+
+<style scoped>
+.detail-header {
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #ecf5ff 100%);
+  border-radius: 8px;
+  gap: 20px;
+}
+
+.detail-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 30px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.detail-basic {
+  flex: 1;
+}
+
+.detail-name {
+  font-size: 22px;
+  font-weight: bold;
+  color: #303133;
+}
+
+.detail-meta {
+  color: #606266;
+  font-size: 13px;
+  display: flex;
+  gap: 20px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.detail-stats {
+  display: flex;
+  gap: 20px;
+}
+
+.detail-stat-item {
+  text-align: center;
+  min-width: 100px;
+}
+
+.ds-value {
+  font-size: 22px;
+  font-weight: bold;
+}
+
+.ds-value.blue { color: #409eff; }
+.ds-value.green { color: #67c23a; }
+
+.ds-label {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.detail-mini-card {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+}
+
+.dmc-num {
+  font-size: 20px;
+  font-weight: bold;
+}
+.dmc-num.blue { color: #409eff; }
+.dmc-num.green { color: #67c23a; }
+.dmc-num.orange { color: #e6a23c; }
+
+.dmc-label {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.timeline-filter {
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.timeline-wrapper {
+  max-height: 450px;
+  overflow-y: auto;
+  border: 1px solid #f5f7fa;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.tl-card {
+  background: #fff;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border: 1px solid #ebeef5;
+  margin-left: 8px;
+}
+
+.tl-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.tl-title {
+  font-weight: bold;
+  color: #303133;
+  font-size: 14px;
+}
+
+.tl-body {
+  color: #606266;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.tl-meta {
+  color: #909399;
+  font-size: 12px;
+  margin-top: 6px;
+}
+</style>
