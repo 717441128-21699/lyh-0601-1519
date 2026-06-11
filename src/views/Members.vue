@@ -102,17 +102,49 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="rechargeDialogVisible" title="会员充值" width="450px">
+    <el-dialog v-model="rechargeDialogVisible" title="会员充值" width="550px">
       <el-form label-width="100px">
         <el-form-item label="会员">
           <span>{{ rechargeMember?.name }} ({{ rechargeMember?.phone }})</span>
         </el-form-item>
-        <el-form-item label="充值金额(元)">
-          <el-input-number v-model="rechargeAmount" :min="0" :step="100" style="width: 100%" />
+        <el-form-item label="充值方式">
+          <el-radio-group v-model="rechargeMode">
+            <el-radio value="custom">自定义充值</el-radio>
+            <el-radio value="package">选择套餐</el-radio>
+          </el-radio-group>
         </el-form-item>
-        <el-form-item label="充值次数">
-          <el-input-number v-model="rechargeSessions" :min="0" style="width: 100%" />
-        </el-form-item>
+        <template v-if="rechargeMode === 'package'">
+          <el-form-item label="选择套餐">
+            <el-select v-model="selectedPackageId" style="width: 100%" @change="onPackageChange">
+              <el-option-group v-for="group in packageGroups" :key="group.type" :label="group.label">
+                <el-option v-for="pkg in group.packages" :key="pkg.id" :label="pkg.name + ' - ¥' + pkg.price" :value="pkg.id">
+                  <span>{{ pkg.name }}</span>
+                  <span style="float: right; color: #67c23a">¥{{ pkg.price }}</span>
+                </el-option>
+              </el-option-group>
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="selectedPackage" label="套餐详情">
+            <div style="padding: 12px; background: #f5f7fa; border-radius: 4px; width: 100%">
+              <div><strong>{{ selectedPackage.name }}</strong></div>
+              <div style="color: #606266; font-size: 13px; margin-top: 4px">{{ selectedPackage.description }}</div>
+              <div style="margin-top: 8px; font-size: 13px">
+                <span v-if="selectedPackage.sessions > 0" style="margin-right: 16px">包含次数: <strong>{{ selectedPackage.sessions }}</strong>次</span>
+                <span v-if="selectedPackage.balance > 0" style="margin-right: 16px">储值余额: <strong>¥{{ selectedPackage.balance + (selectedPackage.bonus || 0) }}</strong></span>
+                <span v-if="selectedPackage.duration > 0">有效期: <strong>{{ selectedPackage.duration }}</strong>天</span>
+                <span v-if="selectedPackage.bonus" style="margin-left: 16px; color: #f56c6c">赠送: ¥{{ selectedPackage.bonus }}</span>
+              </div>
+            </div>
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="充值金额(元)">
+            <el-input-number v-model="rechargeAmount" :min="0" :step="100" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="充值次数">
+            <el-input-number v-model="rechargeSessions" :min="0" style="width: 100%" />
+          </el-form-item>
+        </template>
         <el-form-item label="支付方式">
           <el-select v-model="rechargeMethod" style="width: 100%">
             <el-option v-for="m in consumptionStore.paymentMethods" :key="m.value" :label="m.label" :value="m.value" />
@@ -124,7 +156,7 @@
       </el-form>
       <template #footer>
         <el-button @click="rechargeDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="confirmRecharge">确认充值</el-button>
+        <el-button type="primary" :disabled="!canConfirmRecharge" @click="confirmRecharge">确认充值</el-button>
       </template>
     </el-dialog>
   </div>
@@ -235,6 +267,41 @@ const rechargeAmount = ref(0)
 const rechargeSessions = ref(0)
 const rechargeMethod = ref('wechat')
 const rechargeRemark = ref('')
+const rechargeMode = ref('custom')
+const selectedPackageId = ref('')
+
+const selectedPackage = computed(() => {
+  if (!selectedPackageId.value) return null
+  return memberStore.getPackageById(selectedPackageId.value)
+})
+
+const packageGroups = computed(() => {
+  const groups = [
+    { type: 'time', label: '时间卡', packages: [] },
+    { type: 'session', label: '次卡', packages: [] },
+    { type: 'private', label: '私教包', packages: [] },
+    { type: 'balance', label: '储值卡', packages: [] }
+  ]
+  memberStore.packages.forEach(pkg => {
+    const group = groups.find(g => g.type === pkg.type)
+    if (group) group.packages.push(pkg)
+  })
+  return groups
+})
+
+const canConfirmRecharge = computed(() => {
+  if (rechargeMode.value === 'package') {
+    return selectedPackageId.value
+  }
+  return rechargeAmount.value > 0 || rechargeSessions.value > 0
+})
+
+function onPackageChange() {
+  if (selectedPackage.value) {
+    rechargeAmount.value = selectedPackage.value.price
+    rechargeSessions.value = 0
+  }
+}
 
 function openRechargeDialog(row) {
   rechargeMember.value = row
@@ -242,25 +309,51 @@ function openRechargeDialog(row) {
   rechargeSessions.value = 0
   rechargeMethod.value = 'wechat'
   rechargeRemark.value = ''
+  rechargeMode.value = 'custom'
+  selectedPackageId.value = ''
   rechargeDialogVisible.value = true
 }
 
 function confirmRecharge() {
-  if (rechargeAmount.value <= 0 && rechargeSessions.value <= 0) {
-    ElMessage.warning('请输入充值金额或次数')
-    return
+  if (rechargeMode.value === 'package') {
+    if (!selectedPackageId.value) {
+      ElMessage.warning('请选择套餐')
+      return
+    }
+    const result = memberStore.purchasePackage(rechargeMember.value.id, selectedPackageId.value, rechargeMethod.value)
+    if (result.success) {
+      consumptionStore.addTransaction({
+        memberId: rechargeMember.value.id,
+        type: 'recharge',
+        amount: selectedPackage.value.price,
+        sessions: selectedPackage.value.sessions,
+        method: rechargeMethod.value,
+        remark: `购买套餐: ${selectedPackage.value.name}${rechargeRemark.value ? ' - ' + rechargeRemark.value : ''}`,
+        packageId: selectedPackageId.value,
+        packageName: selectedPackage.value.name
+      })
+      ElMessage.success(`成功购买「${selectedPackage.value.name}」`)
+      rechargeDialogVisible.value = false
+    } else {
+      ElMessage.error(result.msg || '购买失败')
+    }
+  } else {
+    if (rechargeAmount.value <= 0 && rechargeSessions.value <= 0) {
+      ElMessage.warning('请输入充值金额或次数')
+      return
+    }
+    if (rechargeAmount.value > 0) memberStore.addBalance(rechargeMember.value.id, rechargeAmount.value)
+    if (rechargeSessions.value > 0) memberStore.addSessions(rechargeMember.value.id, rechargeSessions.value)
+    consumptionStore.addTransaction({
+      memberId: rechargeMember.value.id,
+      type: 'recharge',
+      amount: rechargeAmount.value,
+      sessions: rechargeSessions.value,
+      method: rechargeMethod.value,
+      remark: rechargeRemark.value
+    })
+    ElMessage.success('充值成功')
+    rechargeDialogVisible.value = false
   }
-  if (rechargeAmount.value > 0) memberStore.addBalance(rechargeMember.value.id, rechargeAmount.value)
-  if (rechargeSessions.value > 0) memberStore.addSessions(rechargeMember.value.id, rechargeSessions.value)
-  consumptionStore.addTransaction({
-    memberId: rechargeMember.value.id,
-    type: 'recharge',
-    amount: rechargeAmount.value,
-    sessions: rechargeSessions.value,
-    method: rechargeMethod.value,
-    remark: rechargeRemark.value
-  })
-  ElMessage.success('充值成功')
-  rechargeDialogVisible.value = false
 }
 </script>

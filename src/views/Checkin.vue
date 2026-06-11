@@ -187,8 +187,23 @@ const makeupCourses = computed(() => {
   return courseStore.getUpcomingCourses(14).filter(c => c.id !== selectedCourse.value?.id)
 })
 
+function hasDeductedSession(memberId, courseId) {
+  const existingDeduct = consumptionStore.transactions.find(t => 
+    t.memberId === memberId && 
+    t.courseId === courseId && 
+    t.type === 'deduct'
+  )
+  return !!existingDeduct
+}
+
 function validateBeforeCheckin(member, status) {
+  const courseId = selectedCourse.value.id
+  
   if (status === 'checked' || status === 'makeup') {
+    if (hasDeductedSession(member.id, courseId)) {
+      ElMessage.warning(`会员「${member.name}」本场次已扣过课时，无法重复扣次`)
+      return false
+    }
     if (!memberStore.hasEnoughSessions(member.id)) {
       ElMessage.error(`会员「${member.name}」剩余次数不足，无法${status === 'checked' ? '签到' : '补课'}！当前剩余：${member.remainingSessions}次`)
       return false
@@ -198,12 +213,17 @@ function validateBeforeCheckin(member, status) {
     ElMessage.warning('该会员已完成签到')
     return false
   }
+  if (member.checkStatus === 'makeup' && (status === 'checked' || status === 'makeup')) {
+    ElMessage.warning('该会员已完成补课登记，本场次无法再扣次')
+    return false
+  }
   return true
 }
 
 function doCheckin(member, status) {
   if (!validateBeforeCheckin(member, status)) return
 
+  const courseId = selectedCourse.value.id
   const msg = status === 'checked' ? '签到成功' : status === 'absent' ? '已标记爽约' : status === 'makeup' ? '补课登记成功' : '已处理'
   const confirmMsg = status === 'checked'
     ? `确定为「${member.name}」签到吗？将扣除1次课时。当前剩余：${member.remainingSessions}次`
@@ -215,43 +235,36 @@ function doCheckin(member, status) {
 
   ElMessageBox.confirm(confirmMsg, '确认操作', { type: 'warning' }).then(() => {
     checkinStore.addCheckin({
-      courseId: selectedCourse.value.id,
+      courseId,
       memberId: member.id,
       status,
       remark: ''
     })
-    if (status === 'checked') {
-      const deductResult = memberStore.deductSession(member.id)
-      if (!deductResult) {
-        ElMessage.error('扣次失败，请检查账户状态')
-        return
+    
+    if (status === 'checked' || status === 'makeup') {
+      if (!hasDeductedSession(member.id, courseId)) {
+        const deductResult = memberStore.deductSession(member.id)
+        if (!deductResult) {
+          ElMessage.error('扣次失败，请检查账户状态')
+          return
+        }
+        consumptionStore.addTransaction({
+          memberId: member.id,
+          type: 'deduct',
+          amount: 0,
+          sessions: 1,
+          method: 'balance',
+          remark: selectedCourse.value.name + (status === 'checked' ? ' 签到扣次' : ' 补课扣次'),
+          courseId: courseId
+        })
       }
-      memberStore.resetAbsent(member.id)
-      consumptionStore.addTransaction({
-        memberId: member.id,
-        type: 'deduct',
-        amount: 0,
-        sessions: 1,
-        method: 'balance',
-        remark: selectedCourse.value.name + ' 签到扣次'
-      })
+      if (status === 'checked') {
+        memberStore.resetAbsent(member.id)
+      }
     } else if (status === 'absent') {
       memberStore.incrementAbsent(member.id)
-    } else if (status === 'makeup') {
-      const deductResult = memberStore.deductSession(member.id)
-      if (!deductResult) {
-        ElMessage.error('扣次失败，请检查账户状态')
-        return
-      }
-      consumptionStore.addTransaction({
-        memberId: member.id,
-        type: 'deduct',
-        amount: 0,
-        sessions: 1,
-        method: 'balance',
-        remark: selectedCourse.value.name + ' 补课扣次'
-      })
     }
+    
     ElMessage.success(msg)
     quickSearch.value = ''
   }).catch(() => {})

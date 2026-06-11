@@ -51,11 +51,15 @@ const INITIAL_COURSES = [
 ]
 
 const INITIAL_ENROLLMENTS = []
+const INITIAL_WAITLISTS = []
+const INITIAL_TRANSFERS = []
 
 export const useCourseStore = defineStore('course', {
   state: () => ({
     courses: [...INITIAL_COURSES],
     enrollments: [...INITIAL_ENROLLMENTS],
+    waitlists: [...INITIAL_WAITLISTS],
+    transfers: [...INITIAL_TRANSFERS],
     coaches: [...COACHES],
     sports: SPORTS,
     courseTypes: COURSE_TYPES
@@ -97,12 +101,21 @@ export const useCourseStore = defineStore('course', {
       this.enrollments = this.enrollments.filter(e => e.courseId !== id)
       persist()
     },
-    enrollMember(courseId, memberId) {
+    enrollMember(courseId, memberId, { allowWaitlist = true } = {}) {
       const course = this.courses.find(c => c.id === courseId)
       if (!course) return { success: false, msg: '课程不存在' }
-      if (course.enrolled >= course.capacity) return { success: false, msg: '课程已满' }
       const exists = this.enrollments.find(e => e.courseId === courseId && e.memberId === memberId)
       if (exists) return { success: false, msg: '该会员已报名此课程' }
+      const inWaitlist = this.waitlists.find(w => w.courseId === courseId && w.memberId === memberId)
+      if (inWaitlist) return { success: false, msg: '该会员已在候补队列中' }
+      
+      if (course.enrolled >= course.capacity) {
+        if (allowWaitlist) {
+          return this.addToWaitlist(courseId, memberId)
+        }
+        return { success: false, msg: '课程已满' }
+      }
+      
       this.enrollments.push({
         id: generateId(),
         courseId,
@@ -112,7 +125,70 @@ export const useCourseStore = defineStore('course', {
       })
       course.enrolled += 1
       persist()
-      return { success: true }
+      return { success: true, type: 'enrolled' }
+    },
+    addToWaitlist(courseId, memberId) {
+      const course = this.courses.find(c => c.id === courseId)
+      if (!course) return { success: false, msg: '课程不存在' }
+      const position = this.waitlists.filter(w => w.courseId === courseId).length + 1
+      this.waitlists.push({
+        id: generateId(),
+        courseId,
+        memberId,
+        position,
+        waitDate: dayjs().format('YYYY-MM-DD HH:mm')
+      })
+      persist()
+      return { success: true, type: 'waitlist', position, msg: `已加入候补队列，当前第${position}位` }
+    },
+    getWaitlistByCourse(courseId) {
+      return this.waitlists.filter(w => w.courseId === courseId).sort((a, b) => a.position - b.position)
+    },
+    isMemberInWaitlist(courseId, memberId) {
+      return this.waitlists.some(w => w.courseId === courseId && w.memberId === memberId)
+    },
+    getMemberWaitlistPosition(courseId, memberId) {
+      const item = this.waitlists.find(w => w.courseId === courseId && w.memberId === memberId)
+      return item ? item.position : null
+    },
+    removeFromWaitlist(courseId, memberId) {
+      const item = this.waitlists.find(w => w.courseId === courseId && w.memberId === memberId)
+      if (item) {
+        this.waitlists = this.waitlists.filter(w => w.id !== item.id)
+        const courseWaitlist = this.waitlists.filter(w => w.courseId === courseId).sort((a, b) => a.position - b.position)
+        courseWaitlist.forEach((w, index) => {
+          w.position = index + 1
+        })
+        persist()
+        return { success: true }
+      }
+      return { success: false, msg: '未找到候补记录' }
+    },
+    processWaitlist(courseId) {
+      const course = this.courses.find(c => c.id === courseId)
+      if (!course) return null
+      if (course.enrolled >= course.capacity) return null
+      
+      const courseWaitlist = this.getWaitlistByCourse(courseId)
+      if (courseWaitlist.length === 0) return null
+      
+      const nextMember = courseWaitlist[0]
+      this.enrollments.push({
+        id: generateId(),
+        courseId,
+        memberId: nextMember.memberId,
+        enrollDate: dayjs().format('YYYY-MM-DD HH:mm'),
+        status: 'enrolled',
+        fromWaitlist: true
+      })
+      course.enrolled += 1
+      this.waitlists = this.waitlists.filter(w => w.id !== nextMember.id)
+      const remainingWaitlist = this.waitlists.filter(w => w.courseId === courseId).sort((a, b) => a.position - b.position)
+      remainingWaitlist.forEach((w, index) => {
+        w.position = index + 1
+      })
+      persist()
+      return nextMember
     },
     cancelEnrollment(courseId, memberId) {
       const enrollment = this.enrollments.find(e => e.courseId === courseId && e.memberId === memberId)
@@ -122,10 +198,64 @@ export const useCourseStore = defineStore('course', {
         if (course && course.enrolled > 0) {
           course.enrolled -= 1
         }
+        const promoted = this.processWaitlist(courseId)
         persist()
-        return { success: true }
+        return { success: true, promoted }
       }
       return { success: false, msg: '未找到报名记录' }
+    },
+    transferCourse(fromCourseId, toCourseId, memberId) {
+      if (fromCourseId === toCourseId) {
+        return { success: false, msg: '不能转到同一节课' }
+      }
+      const fromEnrollment = this.enrollments.find(e => e.courseId === fromCourseId && e.memberId === memberId)
+      if (!fromEnrollment) return { success: false, msg: '原课程报名记录不存在' }
+      
+      const toCourse = this.courses.find(c => c.id === toCourseId)
+      if (!toCourse) return { success: false, msg: '目标课程不存在' }
+      
+      const alreadyEnrolled = this.enrollments.find(e => e.courseId === toCourseId && e.memberId === memberId)
+      if (alreadyEnrolled) return { success: false, msg: '该会员已报名目标课程' }
+      
+      if (toCourse.enrolled >= toCourse.capacity) {
+        return { success: false, msg: '目标课程已满' }
+      }
+      
+      this.enrollments = this.enrollments.filter(e => e.id !== fromEnrollment.id)
+      const fromCourse = this.courses.find(c => c.id === fromCourseId)
+      if (fromCourse && fromCourse.enrolled > 0) {
+        fromCourse.enrolled -= 1
+      }
+      
+      this.enrollments.push({
+        id: generateId(),
+        courseId: toCourseId,
+        memberId,
+        enrollDate: dayjs().format('YYYY-MM-DD HH:mm'),
+        status: 'enrolled',
+        transferred: true,
+        fromCourseId,
+        fromCourseName: fromCourse?.name
+      })
+      toCourse.enrolled += 1
+      
+      const transferRecord = {
+        id: generateId(),
+        memberId,
+        fromCourseId,
+        fromCourseName: fromCourse?.name,
+        toCourseId,
+        toCourseName: toCourse?.name,
+        date: dayjs().format('YYYY-MM-DD HH:mm')
+      }
+      this.transfers.unshift(transferRecord)
+      
+      const promoted = this.processWaitlist(fromCourseId)
+      persist()
+      return { success: true, transferRecord, promoted }
+    },
+    getTransfersByMember(memberId) {
+      return this.transfers.filter(t => t.memberId === memberId)
     },
     getEnrollmentsByCourse(courseId) {
       return this.enrollments.filter(e => e.courseId === courseId)

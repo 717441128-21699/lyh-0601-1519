@@ -149,7 +149,7 @@
             <el-option v-for="m in consumptionStore.paymentMethods" :key="m.value" :label="m.label" :value="m.value" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="currentConsumeMember && consumeForm.method === 'balance'" label="余额校验">
+        <el-form-item v-if="currentConsumeMember && consumeForm.method === 'balance' && consumeForm.amount > 0" label="余额校验">
           <el-tag :type="canConsumeBalance ? 'success' : 'danger'">
             {{ canConsumeBalance ? '余额充足' : '余额不足：需¥' + consumeForm.amount + '，仅有¥' + currentConsumeMember.balance }}
           </el-tag>
@@ -297,7 +297,6 @@ const currentConsumeMember = ref(null)
 const consumeForm = reactive({ memberId: '', amount: 0, sessions: 0, method: 'balance', remark: '' })
 const consumeRules = {
   memberId: [{ required: true, message: '请选择会员', trigger: 'change' }],
-  amount: [{ required: true, message: '请输入消费金额', trigger: 'blur' }],
   remark: [{ required: true, message: '请输入消费项目', trigger: 'blur' }],
   method: [{ required: true, message: '请选择支付方式', trigger: 'change' }]
 }
@@ -314,7 +313,7 @@ const canConsumeSessions = computed(() => {
 
 const canSubmitConsume = computed(() => {
   return currentConsumeMember.value && canConsumeBalance.value && canConsumeSessions.value &&
-         consumeForm.amount > 0 && consumeForm.remark
+         (consumeForm.amount > 0 || consumeForm.sessions > 0) && consumeForm.remark
 })
 
 function updateConsumeMemberInfo() {
@@ -335,21 +334,27 @@ function submitConsume() {
   consumeFormRef.value.validate(valid => {
     if (!valid) return
 
-    if (consumeForm.method === 'balance' && !canConsumeBalance.value) {
-      ElMessage.error(`储值余额不足！需¥${consumeForm.amount}，当前仅有¥${currentConsumeMember.value.balance}`)
-      return
+    if (consumeForm.amount > 0 || consumeForm.method === 'balance') {
+      if (consumeForm.method === 'balance' && !canConsumeBalance.value) {
+        ElMessage.error(`储值余额不足！需¥${consumeForm.amount}，当前仅有¥${currentConsumeMember.value.balance}`)
+        return
+      }
     }
     if (consumeForm.sessions > 0 && !canConsumeSessions.value) {
       ElMessage.error(`剩余次数不足！需${consumeForm.sessions}次，当前仅有${currentConsumeMember.value.remainingSessions}次`)
       return
     }
 
+    const deductDesc = []
+    if (consumeForm.amount > 0) deductDesc.push(`¥${consumeForm.amount}`)
+    if (consumeForm.sessions > 0) deductDesc.push(`${consumeForm.sessions}次`)
+    
     ElMessageBox.confirm(
-      `确认扣除「${currentConsumeMember.value.name}」的${consumeForm.amount > 0 ? '¥' + consumeForm.amount : ''}${consumeForm.sessions > 0 ? ' ' + consumeForm.sessions + '次' : ''}吗？`,
+      `确认扣除「${currentConsumeMember.value.name}」的${deductDesc.join(' ')}吗？`,
       '消费确认',
       { type: 'warning' }
     ).then(() => {
-      if (consumeForm.method === 'balance') {
+      if (consumeForm.amount > 0 && consumeForm.method === 'balance') {
         const result = memberStore.deductBalance(consumeForm.memberId, consumeForm.amount)
         if (!result) {
           ElMessage.error('扣款失败，请检查账户余额')

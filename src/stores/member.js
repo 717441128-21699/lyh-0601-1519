@@ -9,13 +9,29 @@ const LEVELS = [
   { value: 'diamond', label: '钻石会员', color: '#409eff' }
 ]
 
-const INITIAL_MEMBERS = [
-  { id: 'm001', name: '张伟', phone: '13800138001', level: 'gold', joinDate: '2025-01-15', expireDate: '2026-06-20', balance: 3280, remainingSessions: 45, totalSessions: 100, absentCount: 0, remark: '羽毛球爱好者，每周三次' },
-  { id: 'm002', name: '李娜', phone: '13800138002', level: 'diamond', joinDate: '2024-08-10', expireDate: '2026-08-10', balance: 12500, remainingSessions: 120, totalSessions: 200, absentCount: 0, remark: 'VIP客户，篮球私教课' },
-  { id: 'm003', name: '王强', phone: '13800138003', level: 'silver', joinDate: '2025-03-20', expireDate: '2026-06-15', balance: 580, remainingSessions: 8, totalSessions: 30, absentCount: 3, remark: '' },
-  { id: 'm004', name: '刘洋', phone: '13800138004', level: 'normal', joinDate: '2025-06-01', expireDate: '2026-06-25', balance: 120, remainingSessions: 3, totalSessions: 10, absentCount: 2, remark: '新人，参加体验课' },
-  { id: 'm005', name: '陈静', phone: '13800138005', level: 'gold', joinDate: '2024-12-01', expireDate: '2026-12-01', balance: 5600, remainingSessions: 68, totalSessions: 150, absentCount: 1, remark: '' }
+const MEMBERSHIP_PACKAGES = [
+  { id: 'pkg_month', name: '月卡会员', type: 'time', price: 299, duration: 30, sessions: 30, balance: 0, description: '30天有效期，30次课程', color: '#409eff' },
+  { id: 'pkg_quarter', name: '季卡会员', type: 'time', price: 799, duration: 90, sessions: 90, balance: 0, description: '90天有效期，90次课程', color: '#67c23a' },
+  { id: 'pkg_year', name: '年卡会员', type: 'time', price: 2888, duration: 365, sessions: 365, balance: 0, description: '365天有效期，全年畅练', color: '#e6a23c' },
+  { id: 'pkg_10', name: '10次课包', type: 'session', price: 680, duration: 180, sessions: 10, balance: 0, description: '180天有效期，10次课程', color: '#409eff' },
+  { id: 'pkg_30', name: '30次课包', type: 'session', price: 1800, duration: 365, sessions: 30, balance: 0, description: '365天有效期，30次课程', color: '#67c23a' },
+  { id: 'pkg_50', name: '50次课包', type: 'session', price: 2800, duration: 730, sessions: 50, balance: 0, description: '730天有效期，50次课程', color: '#e6a23c' },
+  { id: 'pkg_private_10', name: '私教10节', type: 'private', price: 2800, duration: 180, sessions: 10, balance: 0, description: '180天有效期，10节私教课', color: '#f56c6c' },
+  { id: 'pkg_private_30', name: '私教30节', type: 'private', price: 7800, duration: 365, sessions: 30, balance: 0, description: '365天有效期，30节私教课', color: '#909399' },
+  { id: 'pkg_balance_500', name: '储值500', type: 'balance', price: 500, duration: 0, sessions: 0, balance: 500, description: '赠送50元', color: '#409eff', bonus: 50 },
+  { id: 'pkg_balance_1000', name: '储值1000', type: 'balance', price: 1000, duration: 0, sessions: 0, balance: 1000, description: '赠送150元', color: '#67c23a', bonus: 150 },
+  { id: 'pkg_balance_2000', name: '储值2000', type: 'balance', price: 2000, duration: 0, sessions: 0, balance: 2000, description: '赠送400元', color: '#e6a23c', bonus: 400 }
 ]
+
+const INITIAL_MEMBERS = [
+  { id: 'm001', name: '张伟', phone: '13800138001', level: 'gold', joinDate: '2025-01-15', expireDate: '2026-06-20', balance: 3280, remainingSessions: 45, totalSessions: 100, absentCount: 0, remark: '羽毛球爱好者，每周三次', activePackage: null },
+  { id: 'm002', name: '李娜', phone: '13800138002', level: 'diamond', joinDate: '2024-08-10', expireDate: '2026-08-10', balance: 12500, remainingSessions: 120, totalSessions: 200, absentCount: 0, remark: 'VIP客户，篮球私教课', activePackage: null },
+  { id: 'm003', name: '王强', phone: '13800138003', level: 'silver', joinDate: '2025-03-20', expireDate: '2026-06-15', balance: 580, remainingSessions: 8, totalSessions: 30, absentCount: 3, remark: '', activePackage: null },
+  { id: 'm004', name: '刘洋', phone: '13800138004', level: 'normal', joinDate: '2025-06-01', expireDate: '2026-06-25', balance: 120, remainingSessions: 3, totalSessions: 10, absentCount: 2, remark: '新人，参加体验课', activePackage: null },
+  { id: 'm005', name: '陈静', phone: '13800138005', level: 'gold', joinDate: '2024-12-01', expireDate: '2026-12-01', balance: 5600, remainingSessions: 68, totalSessions: 150, absentCount: 1, remark: '', activePackage: null }
+]
+
+const INITIAL_PACKAGE_SALES = []
 
 function generateId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
@@ -24,7 +40,9 @@ function generateId() {
 export const useMemberStore = defineStore('member', {
   state: () => ({
     members: [...INITIAL_MEMBERS],
-    levels: LEVELS
+    levels: LEVELS,
+    packages: MEMBERSHIP_PACKAGES,
+    packageSales: [...INITIAL_PACKAGE_SALES]
   }),
 
   getters: {
@@ -40,6 +58,70 @@ export const useMemberStore = defineStore('member', {
     getLevelColor(value) {
       const level = LEVELS.find(l => l.value === value)
       return level ? level.color : '#909399'
+    },
+    getPackageById(id) {
+      return MEMBERSHIP_PACKAGES.find(p => p.id === id)
+    },
+    getPackageTypeLabel(type) {
+      const labels = { time: '时间卡', session: '次卡', private: '私教包', balance: '储值卡' }
+      return labels[type] || type
+    },
+    purchasePackage(memberId, packageId, paymentMethod = 'wechat') {
+      const member = this.getMemberById(memberId)
+      const pkg = this.getPackageById(packageId)
+      if (!member || !pkg) return { success: false, msg: '会员或套餐不存在' }
+
+      if (pkg.sessions > 0) {
+        member.remainingSessions += pkg.sessions
+        member.totalSessions += pkg.sessions
+      }
+      if (pkg.balance > 0) {
+        const addAmount = pkg.balance + (pkg.bonus || 0)
+        member.balance = Math.round((member.balance + addAmount) * 100) / 100
+      }
+      if (pkg.duration > 0) {
+        const newExpire = dayjs().add(pkg.duration, 'day')
+        if (dayjs(member.expireDate).isBefore(newExpire)) {
+          member.expireDate = newExpire.format('YYYY-MM-DD')
+        }
+      }
+
+      member.activePackage = {
+        packageId: pkg.id,
+        packageName: pkg.name,
+        purchaseDate: dayjs().format('YYYY-MM-DD HH:mm')
+      }
+
+      const saleRecord = {
+        id: generateId(),
+        memberId,
+        memberName: member.name,
+        packageId: pkg.id,
+        packageName: pkg.name,
+        packageType: pkg.type,
+        amount: pkg.price,
+        paymentMethod,
+        date: dayjs().format('YYYY-MM-DD HH:mm')
+      }
+      this.packageSales.unshift(saleRecord)
+      persist()
+      return { success: true, sale: saleRecord, member }
+    },
+    getPackageSalesStats() {
+      const stats = {}
+      MEMBERSHIP_PACKAGES.forEach(pkg => {
+        stats[pkg.id] = { name: pkg.name, type: pkg.type, count: 0, amount: 0 }
+      })
+      this.packageSales.forEach(sale => {
+        if (stats[sale.packageId]) {
+          stats[sale.packageId].count += 1
+          stats[sale.packageId].amount += sale.amount
+        }
+      })
+      return Object.values(stats).filter(s => s.count > 0 || s.amount > 0)
+    },
+    getPackageSalesByDate(date) {
+      return this.packageSales.filter(s => s.date.startsWith(date))
     },
     addMember(data) {
       const member = {

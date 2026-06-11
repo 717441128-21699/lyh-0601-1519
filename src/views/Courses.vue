@@ -54,18 +54,21 @@
           <template #default="{ row }">¥{{ row.price }}</template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
-        <el-table-column label="操作" width="260" fixed="right" class="no-print">
-          <template #default="{ row }">
-            <div class="table-actions">
-              <el-button size="small" type="success" @click="openEnrollDialog(row)">报名</el-button>
-              <el-button size="small" type="primary" plain @click="openRosterDialog(row)" :disabled="row.enrolled === 0">
-                名单({{ row.enrolled }})
-              </el-button>
-              <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
-              <el-button size="small" type="danger" @click="deleteCourse(row)">删除</el-button>
-            </div>
-          </template>
-        </el-table-column>
+        <el-table-column label="操作" width="380" fixed="right" class="no-print">
+            <template #default="{ row }">
+              <div class="table-actions">
+                <el-button size="small" type="success" @click="openEnrollDialog(row)">报名</el-button>
+                <el-button size="small" type="primary" plain @click="openRosterDialog(row)" :disabled="row.enrolled === 0">
+                  名单({{ row.enrolled }})
+                </el-button>
+                <el-button size="small" type="warning" plain @click="openWaitlistDialog(row)" :disabled="getWaitlistCount(row.id) === 0">
+                  候补({{ getWaitlistCount(row.id) }})
+                </el-button>
+                <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
+                <el-button size="small" type="danger" @click="deleteCourse(row)">删除</el-button>
+              </div>
+            </template>
+          </el-table-column>
       </el-table>
     </div>
 
@@ -143,20 +146,40 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="100" align="center">
+          <el-table-column label="状态" width="120" align="center">
             <template #default="{ row }">
               <el-tag v-if="isEnrolled(row.id)" type="info" size="small">已报名</el-tag>
+              <el-tag v-else-if="getWaitlistPosition(row.id)" type="warning" size="small">
+                候补第{{ getWaitlistPosition(row.id) }}位
+              </el-tag>
+              <el-tag v-else-if="currentCourse.enrolled >= currentCourse.capacity" type="danger" size="small">已满员</el-tag>
               <el-tag v-else type="success" size="small">可报名</el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="100" align="center" class="no-print">
+          <el-table-column label="操作" width="180" align="center" class="no-print">
             <template #default="{ row }">
-              <el-button
-                size="small"
-                type="primary"
-                :disabled="isEnrolled(row.id) || currentCourse.enrolled >= currentCourse.capacity"
-                @click="doEnroll(row)"
-              >报名</el-button>
+              <div class="table-actions">
+                <el-button
+                  v-if="!isEnrolled(row.id) && !getWaitlistPosition(row.id)"
+                  size="small"
+                  type="primary"
+                  @click="doEnroll(row)"
+                >{{ currentCourse.enrolled >= currentCourse.capacity ? '候补' : '报名' }}</el-button>
+                <el-button
+                  v-if="getWaitlistPosition(row.id)"
+                  size="small"
+                  type="danger"
+                  plain
+                  @click="cancelWaitlist(row)"
+                >取消候补</el-button>
+                <el-button
+                  v-if="isEnrolled(row.id)"
+                  size="small"
+                  type="warning"
+                  plain
+                  @click="openTransferDialog(row)"
+                >转课</el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -181,6 +204,15 @@
               </el-tag>
             </template>
           </el-table-column>
+          <el-table-column label="报名来源" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.fromWaitlist" type="warning" size="small">候补补入</el-tag>
+              <el-tag v-else-if="row.transferred" type="primary" size="small">
+                转入({{ row.fromCourseName }})
+              </el-tag>
+              <el-tag v-else type="info" size="small">正常报名</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="报名时间" width="150">
             <template #default="{ row }">{{ row.enrollDate }}</template>
           </el-table-column>
@@ -195,6 +227,77 @@
         </el-table>
         <el-empty v-if="rosterMembers.length === 0" description="暂无学员报名" />
       </div>
+    </el-dialog>
+
+    <el-dialog v-model="waitlistDialogVisible" title="候补队列" width="500px">
+      <div v-if="waitlistCourse">
+        <div style="margin-bottom: 16px; padding: 12px; background: #f5f7fa; border-radius: 4px">
+          <strong>{{ waitlistCourse.name }}</strong>
+          <span style="margin-left: 16px; color: #606266">{{ waitlistCourse.date }} {{ waitlistCourse.startTime }}-{{ waitlistCourse.endTime }}</span>
+          <span style="margin-left: 16px; color: #606266">候补 {{ waitlistMembers.length }} 人</span>
+        </div>
+        <el-table :data="waitlistMembers" size="small" style="width: 100%">
+          <el-table-column label="顺位" width="60" align="center">
+            <template #default="{ row }">{{ row.position }}</template>
+          </el-table-column>
+          <el-table-column prop="name" label="姓名" width="100" />
+          <el-table-column prop="phone" label="电话" width="130" />
+          <el-table-column label="等级" width="100">
+            <template #default="{ row }">
+              <el-tag :color="memberStore.getLevelColor(row.level)" effect="dark" style="color:#fff" size="small">
+                {{ memberStore.getLevelLabel(row.level) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="候补时间" width="150">
+            <template #default="{ row }">{{ row.waitDate }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" align="center" class="no-print">
+            <template #default="{ row }">
+              <el-button size="small" type="danger" plain @click="removeWaitlistMember(row)">移除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-if="waitlistMembers.length === 0" description="暂无候补学员" />
+      </div>
+    </el-dialog>
+
+    <el-dialog v-model="transferDialogVisible" title="课程转课" width="500px">
+      <div v-if="transferMember">
+        <div style="margin-bottom: 16px; padding: 12px; background: #f5f7fa; border-radius: 4px">
+          <div><strong>转课会员</strong>: {{ transferMember.name }} ({{ transferMember.phone }})</div>
+          <div style="margin-top: 8px">
+            <strong>原课程</strong>: {{ currentCourse?.name }} ({{ currentCourse?.date }} {{ currentCourse?.startTime }})
+          </div>
+        </div>
+        <el-form label-width="100px">
+          <el-form-item label="目标课程" prop="toCourseId">
+            <el-select v-model="toCourseId" placeholder="选择要转入的课程" style="width: 100%" filterable>
+              <el-option
+                v-for="c in availableTransferCourses"
+                :key="c.id"
+                :label="c.date + ' ' + c.startTime + ' ' + c.name + ' (' + c.enrolled + '/' + c.capacity + ')'"
+                :value="c.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="toCourseId" label="目标课程">
+            <div style="padding: 12px; background: #f5f7fa; border-radius: 4px; width: 100%">
+              <div><strong>{{ toCourse?.name }}</strong></div>
+              <div style="color: #606266; font-size: 13px; margin-top: 4px">
+                {{ toCourse?.date }} {{ toCourse?.startTime }}-{{ toCourse?.endTime }} | {{ toCourse?.venue }}
+              </div>
+              <div style="color: #606266; font-size: 13px; margin-top: 4px">
+                名额: {{ toCourse?.enrolled }}/{{ toCourse?.capacity }} | 教练: {{ courseStore.getCoachName(toCourse?.coachId) }}
+              </div>
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button @click="transferDialogVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!toCourseId" @click="confirmTransfer">确认转课</el-button>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -312,7 +415,11 @@ function isEnrolled(memberId) {
 function doEnroll(member) {
   const result = courseStore.enrollMember(currentCourse.value.id, member.id)
   if (result.success) {
-    ElMessage.success(`会员「${member.name}」报名成功`)
+    if (result.type === 'waitlist') {
+      ElMessage.success(result.msg || '已加入候补队列')
+    } else {
+      ElMessage.success(`会员「${member.name}」报名成功`)
+    }
   } else {
     ElMessage.error(result.msg)
   }
@@ -327,7 +434,7 @@ const rosterMembers = computed(() => {
   return enrollments.map(e => {
     const member = memberStore.getMemberById(e.memberId)
     if (!member) return null
-    return { ...member, enrollDate: e.enrollDate }
+    return { ...member, enrollDate: e.enrollDate, fromWaitlist: e.fromWaitlist, transferred: e.transferred, fromCourseName: e.fromCourseName }
   }).filter(Boolean)
 })
 
@@ -344,7 +451,117 @@ function cancelEnroll(member) {
   ).then(() => {
     const result = courseStore.cancelEnrollment(rosterCourse.value.id, member.id)
     if (result.success) {
-      ElMessage.success('已取消报名，名额已恢复')
+      let msg = '已取消报名，名额已恢复'
+      if (result.promoted) {
+        const promotedMember = memberStore.getMemberById(result.promoted.memberId)
+        msg += `。候补会员「${promotedMember?.name || '未知'}」已自动补位`
+      }
+      ElMessage.success(msg)
+    } else {
+      ElMessage.error(result.msg || '操作失败')
+    }
+  }).catch(() => {})
+}
+
+const waitlistDialogVisible = ref(false)
+const waitlistCourse = ref(null)
+
+const waitlistMembers = computed(() => {
+  if (!waitlistCourse.value) return []
+  const waitlist = courseStore.getWaitlistByCourse(waitlistCourse.value.id)
+  return waitlist.map(w => {
+    const member = memberStore.getMemberById(w.memberId)
+    if (!member) return null
+    return { ...member, position: w.position, waitDate: w.waitDate }
+  }).filter(Boolean)
+})
+
+function getWaitlistCount(courseId) {
+  return courseStore.getWaitlistByCourse(courseId).length
+}
+
+function openWaitlistDialog(row) {
+  waitlistCourse.value = row
+  waitlistDialogVisible.value = true
+}
+
+function removeWaitlistMember(member) {
+  ElMessageBox.confirm(
+    `确定将「${member.name}」从候补队列中移除吗？`,
+    '移除候补确认',
+    { type: 'warning' }
+  ).then(() => {
+    const result = courseStore.removeFromWaitlist(waitlistCourse.value.id, member.id)
+    if (result.success) {
+      ElMessage.success('已从候补队列移除')
+    } else {
+      ElMessage.error(result.msg || '操作失败')
+    }
+  }).catch(() => {})
+}
+
+function getWaitlistPosition(memberId) {
+  if (!currentCourse.value) return null
+  return courseStore.getMemberWaitlistPosition(currentCourse.value.id, memberId)
+}
+
+function cancelWaitlist(member) {
+  ElMessageBox.confirm(
+    `确定取消「${member.name}」的候补吗？`,
+    '取消候补确认',
+    { type: 'warning' }
+  ).then(() => {
+    const result = courseStore.removeFromWaitlist(currentCourse.value.id, member.id)
+    if (result.success) {
+      ElMessage.success('已取消候补')
+    } else {
+      ElMessage.error(result.msg || '操作失败')
+    }
+  }).catch(() => {})
+}
+
+const transferDialogVisible = ref(false)
+const transferMember = ref(null)
+const toCourseId = ref('')
+
+const availableTransferCourses = computed(() => {
+  if (!currentCourse.value) return []
+  return courseStore.courses.filter(c => {
+    if (c.id === currentCourse.value.id) return false
+    if (c.enrolled >= c.capacity) return false
+    if (dayjs(c.date).isBefore(dayjs())) return false
+    return true
+  }).sort((a, b) => (a.date + a.startTime).localeCompare(b.date + b.startTime))
+})
+
+const toCourse = computed(() => {
+  if (!toCourseId.value) return null
+  return courseStore.courses.find(c => c.id === toCourseId.value)
+})
+
+function openTransferDialog(member) {
+  transferMember.value = member
+  toCourseId.value = ''
+  transferDialogVisible.value = true
+}
+
+function confirmTransfer() {
+  if (!transferMember.value || !toCourseId.value || !currentCourse.value) return
+  
+  ElMessageBox.confirm(
+    `确定将「${transferMember.value.name}」从「${currentCourse.value.name}」转到「${toCourse.value?.name}」吗？`,
+    '转课确认',
+    { type: 'warning' }
+  ).then(() => {
+    const result = courseStore.transferCourse(currentCourse.value.id, toCourseId.value, transferMember.value.id)
+    if (result.success) {
+      let msg = '转课成功'
+      if (result.promoted) {
+        const promotedMember = memberStore.getMemberById(result.promoted.memberId)
+        msg += `。原课程候补会员「${promotedMember?.name || '未知'}」已自动补位`
+      }
+      ElMessage.success(msg)
+      transferDialogVisible.value = false
     } else {
       ElMessage.error(result.msg || '操作失败')
     }

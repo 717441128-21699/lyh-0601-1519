@@ -20,11 +20,20 @@ export function initStores() {
     if (data.members && data.members.length > 0) {
       memberStore.$patch({ members: data.members })
     }
+    if (data.packageSales && data.packageSales.length > 0) {
+      memberStore.$patch({ packageSales: data.packageSales })
+    }
     if (data.courses && data.courses.length > 0) {
       courseStore.$patch({ courses: data.courses })
     }
     if (data.enrollments && data.enrollments.length > 0) {
       courseStore.$patch({ enrollments: data.enrollments })
+    }
+    if (data.waitlists && data.waitlists.length > 0) {
+      courseStore.$patch({ waitlists: data.waitlists })
+    }
+    if (data.transfers && data.transfers.length > 0) {
+      courseStore.$patch({ transfers: data.transfers })
     }
     if (data.checkins && data.checkins.length > 0) {
       checkinStore.$patch({ checkins: data.checkins })
@@ -47,8 +56,11 @@ export function persist() {
 
     storage.saveData({
       members: memberStore.members,
+      packageSales: memberStore.packageSales,
       courses: courseStore.courses,
       enrollments: courseStore.enrollments,
+      waitlists: courseStore.waitlists || [],
+      transfers: courseStore.transfers || [],
       checkins: checkinStore.checkins,
       transactions: consumptionStore.transactions
     })
