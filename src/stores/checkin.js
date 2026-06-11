@@ -1,0 +1,79 @@
+import { defineStore } from 'pinia'
+import dayjs from 'dayjs'
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+}
+
+const CHECKIN_STATUS = [
+  { value: 'checked', label: '已签到', color: '#67c23a', type: 'success' },
+  { value: 'absent', label: '爽约', color: '#f56c6c', type: 'danger' },
+  { value: 'leave', label: '请假', color: '#e6a23c', type: 'warning' },
+  { value: 'makeup', label: '补课', color: '#409eff', type: 'primary' }
+]
+
+const today = dayjs().format('YYYY-MM-DD')
+const mockCheckins = [
+  { id: 'ci001', courseId: 'k001', memberId: 'm001', status: 'checked', checkTime: dayjs().format('YYYY-MM-DD HH:mm'), operator: '前台' },
+  { id: 'ci002', courseId: 'k001', memberId: 'm003', status: 'leave', checkTime: dayjs().subtract(1, 'hour').format('YYYY-MM-DD HH:mm'), operator: '前台', remark: '临时有事' },
+  { id: 'ci003', courseId: 'k002', memberId: 'm002', status: 'checked', checkTime: dayjs().format('YYYY-MM-DD HH:mm'), operator: '前台' }
+]
+
+export const useCheckinStore = defineStore('checkin', {
+  state: () => ({
+    checkins: [...mockCheckins],
+    statusList: CHECKIN_STATUS
+  }),
+
+  actions: {
+    getStatusLabel(value) {
+      const s = CHECKIN_STATUS.find(s => s.value === value)
+      return s ? s.label : value
+    },
+    getStatusType(value) {
+      const s = CHECKIN_STATUS.find(s => s.value === value)
+      return s ? s.type : 'info'
+    },
+    addCheckin(data) {
+      const existing = this.checkins.find(c => c.courseId === data.courseId && c.memberId === data.memberId)
+      if (existing) {
+        Object.assign(existing, {
+          ...data,
+          checkTime: dayjs().format('YYYY-MM-DD HH:mm'),
+          id: existing.id
+        })
+        return existing
+      }
+      const record = {
+        id: generateId(),
+        ...data,
+        checkTime: dayjs().format('YYYY-MM-DD HH:mm'),
+        operator: '前台'
+      }
+      this.checkins.unshift(record)
+      return record
+    },
+    updateCheckin(id, data) {
+      const index = this.checkins.findIndex(c => c.id === id)
+      if (index !== -1) {
+        this.checkins[index] = { ...this.checkins[index], ...data }
+      }
+    },
+    deleteCheckin(id) {
+      this.checkins = this.checkins.filter(c => c.id !== id)
+    },
+    getCheckinsByCourse(courseId) {
+      return this.checkins.filter(c => c.courseId === courseId)
+    },
+    getCheckinsByMember(memberId) {
+      return this.checkins.filter(c => c.memberId === memberId)
+    },
+    getCheckinsByDate(date) {
+      return this.checkins.filter(c => c.checkTime.startsWith(date))
+    },
+    getMemberCheckinStatus(courseId, memberId) {
+      const record = this.checkins.find(c => c.courseId === courseId && c.memberId === memberId)
+      return record ? record.status : null
+    }
+  }
+})
